@@ -187,5 +187,6 @@ if __name__ == "__main__":
 
     # H,W 
     results = model(left, right)["sdf"]
+    results = model(left, right)["sdf"]
     
     print(results.shape)

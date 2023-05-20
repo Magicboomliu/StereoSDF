@@ -40,6 +40,18 @@ class ResBlock(nn.Module):
     def forward(self, input):
         x = self.conv(input)
         return x + input
+    
+class ResBlock1x1(nn.Module):
+    def __init__(self, c0, dilation=1):
+        super().__init__()
+        self.conv = nn.Sequential(
+            conv_1x1(c0, c0),
+            conv_1x1(c0, c0),
+        )
+
+    def forward(self, input):
+        x = self.conv(input)
+        return x + input
 
 class RefineNet(nn.Module):
     def __init__(self):
@@ -64,8 +76,11 @@ class RefineNet(nn.Module):
         return F.relu(disp + x)
 
 class StereoNet(nn.Module):
-    def __init__(self):
+    def __init__(self,sdf_type='MLP'):
         super().__init__()
+        
+        self.sdf_type = sdf_type
+        
         self.k = 3
         self.align = 2 ** self.k
         self.max_disp = (192 + 1) // (2 ** self.k)
@@ -91,6 +106,36 @@ class StereoNet(nn.Module):
             nn.ReLU(),
             nn.Conv3d(32, 1, 3, 1, 1),
         )
+        
+        if self.sdf_type=='3D_conv':
+            self.sdf_filter = nn.Sequential(
+            nn.Conv3d(32, 32, 3, 1, 1),
+            nn.BatchNorm3d(32),
+            nn.ReLU(),
+            nn.Conv3d(32, 32, 3, 1, 1),
+            nn.BatchNorm3d(32),
+            nn.ReLU(),
+            nn.Conv3d(32, 32, 3, 1, 1),
+            nn.BatchNorm3d(32),
+            nn.ReLU(),
+            nn.Conv3d(32, 32, 3, 1, 1),
+            nn.BatchNorm3d(32),
+            nn.ReLU(),
+            nn.Conv3d(32, 1, 3, 1, 1),
+            )
+        elif self.sdf_type=='2D_conv':
+            self.sdf_filter = nn.Sequential(
+                ResBlock(self.max_disp),
+                ResBlock(self.max_disp),
+                nn.Conv2d(self.max_disp,self.max_disp,kernel_size=3,stride=1,padding=1)
+            )
+        elif self.sdf_type =="MLP":
+            self.sdf_filter = nn.Sequential(
+                ResBlock1x1(self.max_disp),
+                ResBlock1x1(self.max_disp),
+                nn.Conv2d(self.max_disp,self.max_disp,kernel_size=3,stride=1,padding=1)
+            )
+        
         self.refine_layer = nn.ModuleList([RefineNet() for _ in range(self.k)])
 
     def forward(self, left_img, right_img):
@@ -106,10 +151,15 @@ class StereoNet(nn.Module):
 
         cost_volume = make_cost_volume(lf, rf, self.max_disp)
         
-        
+        if self.sdf_type =='3D_conv':
+            est_sdf = self.sdf_filter(cost_volume)
         
         cost_volume = self.cost_filter(cost_volume).squeeze(1)
-
+        
+        if self.sdf_type in ["2D_conv","MLP"]:
+            est_sdf = self.sdf_filter(cost_volume)
+        
+        
         x = F.softmax(cost_volume, dim=1)
         d = torch.arange(0, self.max_disp, device=x.device, dtype=x.dtype)
         x = torch.sum(x * d.view(1, -1, 1, 1), dim=1, keepdim=True)
@@ -124,6 +174,7 @@ class StereoNet(nn.Module):
         return {
             "disp": multi_scale[-1],
             "multi_scale": multi_scale,
+            'sdf':est_sdf
         }
 
 
@@ -135,7 +186,6 @@ if __name__ == "__main__":
     model = StereoNet()
 
     # H,W 
-    results = model(left, right)["multi_scale"]
+    results = model(left, right)["sdf"]
     
-    for result in results:
-        print(result.shape)
+    print(results.shape)

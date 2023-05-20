@@ -22,7 +22,7 @@ def SDF2Graident(sdf_volume, fx_unit=0.58, fy_unit=1.92, baseline=0.54):
     # coords_3d = coords_3d[:, None, ...] * hypo_depths  # (3, D, H, W)
     fx = fx_unit * width
     fy = fy_unit * height
-    hypo_depths = torch.linspace(0, depth_num-1, depth_num)
+    hypo_depths = torch.linspace(0, depth_num-1, depth_num).type_as(sdf_volume)
     hypo_depths[0] += 1e-4  # precision issue
     hypo_depths = fx * baseline / hypo_depths  # convert disparity to depth
 
@@ -41,6 +41,13 @@ def SDF2Graident(sdf_volume, fx_unit=0.58, fy_unit=1.92, baseline=0.54):
     sdf_gradient_norm = torch.norm(sdf_gradient, dim=1)  # (B, D-1, H-1, W-1)
 
     return sdf_gradient_norm
+
+
+
+
+    
+
+
 
 
 if __name__=="__main__":

@@ -10,6 +10,7 @@ from utils.AverageMeter import AverageMeter
 from utils.common import logger, check_path, write_pfm,count_parameters
 
 from models.Stereonet.stereonet import StereoNet
+from models.Stereonet.stereonet_sdf import StereoNetSDF
 from dataloader.kitti_loader import StereoDataset
 from dataloader import kitti_transform
 
@@ -22,7 +23,7 @@ import time
 import os
 from torch.autograd import Variable
 
-from losses.unsupervised_loss import loss_disp_unsupervised,MultiScaleLoss
+from losses.unsupervised_loss import loss_disp_unsupervised,MultiScaleLoss,Eki_Loss
 
 
 # IMAGENET NORMALIZATION
@@ -102,6 +103,8 @@ class DisparityTrainer(object):
         # Build the Network architecture according to the model name
         if self.model == 'StereoNet':
             self.net = StereoNet()
+        elif self.model=='StereoNetSDF':
+            self.net = StereoNetSDF(sdf_type='2D_conv')
         else:
             raise NotImplementedError
         
@@ -174,6 +177,7 @@ class DisparityTrainer(object):
         batch_time = AverageMeter()
         data_time = AverageMeter()    
         losses = AverageMeter()
+        eki_loss_meter = AverageMeter()
 
     
         nums_samples = len(self.train_loader)
@@ -200,11 +204,30 @@ class DisparityTrainer(object):
             if self.model =="StereoNet":
                 pyramid_disp = self.net(left_input,right_input)["multi_scale"]
                 output = pyramid_disp[-1]
+            elif self.model=="StereoNetSDF":
+                output_staff = self.net(left_input,right_input)
+                pyramid_disp = output_staff["multi_scale"]
+                est_sdf = output_staff['sdf']
             
             
-            # Loss Here
-            loss = MultiScaleLoss(weights=[0.8,1.0,1.0],disp_pyramid=pyramid_disp,
+            if self.model=='StereoNet':
+                # Loss Here
+                loss = MultiScaleLoss(weights=[0.8,1.0,1.0],disp_pyramid=pyramid_disp,
                                   left_img=left_input,right_img=right_input)
+            
+            elif self.model=='StereoNetSDF':
+                photo_loss = MultiScaleLoss(weights=[0.8,1.0,1.0],disp_pyramid=pyramid_disp,
+                                  left_img=left_input,right_img=right_input)
+                sdf_loss = Eki_Loss(est_sdf=est_sdf)
+                
+                
+                # FIXME : beta 
+                beta = 0.01
+                loss = photo_loss + sdf_loss *beta
+                
+                eki_loss_meter.update(sdf_loss.data.item(),left_input.size(0))
+                summary_writer.add_scalar("eki_loss",eki_loss_meter.val,iterations+1)
+                
             
             if type(loss) is list or type(loss) is tuple:
                 
@@ -223,15 +246,30 @@ class DisparityTrainer(object):
             batch_time.update(time.time() - end)
             end = time.time()
             
-            if i_batch % 10 == 0:
-                logger.info('this is round %d', round)
-                logger.info('Epoch: [{0}][{1}/{2}]\t'
-                'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
-                'Data {data_time.val:.3f} ({data_time.avg:.3f})\t'
-                'Loss {loss.val:.3f} ({loss.avg:.3f})\t'.format(
-                epoch, i_batch, self.num_batches_per_epoch, 
-                batch_time=batch_time,
-                data_time=data_time, loss=losses))
+        
+            if self.model=='StereoNet':
+                if i_batch % 10 == 0:
+                    logger.info('this is round %d', round)
+                    logger.info('Epoch: [{0}][{1}/{2}]\t'
+                    'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
+                    'Data {data_time.val:.3f} ({data_time.avg:.3f})\t'
+                    'Loss {loss.val:.3f} ({loss.avg:.3f})\t'.format(
+                    epoch, i_batch, self.num_batches_per_epoch, 
+                    batch_time=batch_time,
+                    data_time=data_time, loss=losses))
+            elif self.model=='StereoNetSDF':
+                if i_batch % 10 == 0:
+                    logger.info('this is round %d', round)
+                    logger.info('Epoch: [{0}][{1}/{2}]\t'
+                    'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
+                    'Data {data_time.val:.3f} ({data_time.avg:.3f})\t'
+                    'Sdf_loss {sdf_losses.val:.3f} ({sdf_losses.avg:.3f})\t'
+                    'Loss {loss.val:.3f} ({loss.avg:.3f})\t'.format(
+                    epoch, i_batch, self.num_batches_per_epoch, 
+                    batch_time=batch_time,
+                    sdf_losses = eki_loss_meter,
+                    data_time=data_time, loss=losses))
+                
 
         return losses.avg, losses.avg,iterations
 
@@ -276,6 +314,8 @@ class DisparityTrainer(object):
                 start_time = time.perf_counter()
                 # Get the predicted disparity
                 if self.model=="StereoNet":
+                    output = self.net(left_input_pad,right_input_pad)['disp']
+                elif self.model =='StereoNetSDF':
                     output = self.net(left_input_pad,right_input_pad)['disp']
 
                 output = output[:,:,h_pad:,w_pad:]

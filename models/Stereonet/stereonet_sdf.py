@@ -75,8 +75,8 @@ class RefineNet(nn.Module):
         x = self.conv0(x)
         return F.relu(disp + x)
 
-class StereoNet(nn.Module):
-    def __init__(self,sdf_type='MLP'):
+class StereoNetSDF(nn.Module):
+    def __init__(self,sdf_type='3D_conv'):
         super().__init__()
         
         self.sdf_type = sdf_type
@@ -152,7 +152,7 @@ class StereoNet(nn.Module):
         cost_volume = make_cost_volume(lf, rf, self.max_disp)
         
         if self.sdf_type =='3D_conv':
-            est_sdf = self.sdf_filter(cost_volume)
+            est_sdf = self.sdf_filter(cost_volume).squeeze(1)
         
         cost_volume = self.cost_filter(cost_volume).squeeze(1)
         
@@ -181,12 +181,11 @@ class StereoNet(nn.Module):
 if __name__ == "__main__":
     from thop import profile
 
-    left = torch.rand(1, 3, 540, 960)
-    right = torch.rand(1, 3, 540, 960)
-    model = StereoNet()
+    left = torch.rand(1, 3, 320, 640)
+    right = torch.rand(1, 3, 320, 640)
+    model = StereoNetSDF()
 
     # H,W 
-    results = model(left, right)["sdf"]
     results = model(left, right)["sdf"]
     
     print(results.shape)

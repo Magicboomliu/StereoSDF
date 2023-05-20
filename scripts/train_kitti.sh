@@ -1,5 +1,5 @@
 TRAIN_KITTI(){
-pretrain_name=StereoNet
+pretrain_name=StereoNetSDF
 cd ..
 mkdir logs
 loss=config/loss_config_disp.json

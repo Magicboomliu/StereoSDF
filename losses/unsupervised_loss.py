@@ -4,7 +4,14 @@ import torch.nn.functional as F
 from math import exp
 from losses.metirc import *
 
+from losses.sdfvolume2gradient import SDF2Graident
 
+def Eki_Loss(est_sdf):
+    
+    sdf_gradient_norm = SDF2Graident(est_sdf)
+    eki_loss = ((sdf_gradient_norm - torch.ones_like(sdf_gradient_norm))**2).mean()
+    
+    return eki_loss
 
 def L1Loss(input, target):
     return (input - target).abs().mean()

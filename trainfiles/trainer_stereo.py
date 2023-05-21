@@ -34,7 +34,9 @@ IMAGENET_STD = [0.229, 0.224, 0.225]
 class DisparityTrainer(object):
     def __init__(self, lr, devices, dataset, trainlist, vallist, datapath, 
                  batch_size, maxdisp,use_deform=False, pretrain=None, 
-                        model='StereoNet', test_batch=4,initial_pretrain=None):
+                        model='StereoNet', test_batch=4,initial_pretrain=None,
+                        wandb=None,
+                        **kwargs):
         super(DisparityTrainer, self).__init__()
         
         self.lr = lr
@@ -58,6 +60,10 @@ class DisparityTrainer(object):
         self.p1_error = P1_metric
         self.model = model
         self.initialize()
+        self.wandb = wandb
+        # additional parameters
+        self.summary_freq = kwargs['opt']['summary_freq']
+        self.sdf_weight = kwargs['opt']['sdf_weight']
     
     # Get Dataset Here
     def _prepare_dataset(self):
@@ -171,7 +177,7 @@ class DisparityTrainer(object):
         return cur_lr
 
 
-    def train_one_epoch(self, epoch, round,iterations,summary_writer):
+    def train_one_epoch(self, epoch, round, iterations, summary_writer):
         
         # Data Summary
         batch_time = AverageMeter()
@@ -179,7 +185,6 @@ class DisparityTrainer(object):
         losses = AverageMeter()
         eki_loss_meter = AverageMeter()
 
-    
         nums_samples = len(self.train_loader)
         train_count = 0
         
@@ -209,7 +214,6 @@ class DisparityTrainer(object):
                 pyramid_disp = output_staff["multi_scale"]
                 est_sdf = output_staff['sdf']
             
-            
             if self.model=='StereoNet':
                 # Loss Here
                 loss = MultiScaleLoss(weights=[0.8,1.0,1.0],disp_pyramid=pyramid_disp,
@@ -220,10 +224,9 @@ class DisparityTrainer(object):
                                   left_img=left_input,right_img=right_input)
                 sdf_loss = Eki_Loss(est_sdf=est_sdf)
                 
-                
                 # FIXME : beta 
-                beta = 0.01
-                loss = photo_loss + sdf_loss *beta
+                # beta = 0.01
+                loss = photo_loss + sdf_loss * self.sdf_weight
                 
                 eki_loss_meter.update(sdf_loss.data.item(),left_input.size(0))
                 summary_writer.add_scalar("eki_loss",eki_loss_meter.val,iterations+1)
@@ -245,10 +248,9 @@ class DisparityTrainer(object):
             # measure elapsed time
             batch_time.update(time.time() - end)
             end = time.time()
-            
         
             if self.model=='StereoNet':
-                if i_batch % 10 == 0:
+                if i_batch % self.summary_freq == 0:
                     logger.info('this is round %d', round)
                     logger.info('Epoch: [{0}][{1}/{2}]\t'
                     'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
@@ -258,7 +260,7 @@ class DisparityTrainer(object):
                     batch_time=batch_time,
                     data_time=data_time, loss=losses))
             elif self.model=='StereoNetSDF':
-                if i_batch % 10 == 0:
+                if i_batch % self.summary_freq == 0:
                     logger.info('this is round %d', round)
                     logger.info('Epoch: [{0}][{1}/{2}]\t'
                     'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
@@ -269,12 +271,13 @@ class DisparityTrainer(object):
                     batch_time=batch_time,
                     sdf_losses = eki_loss_meter,
                     data_time=data_time, loss=losses))
-                
+            
+        # update training logs
+        self.wandb.log('photometric_loss': photo_loss.data.cpu().numpy())
+        self.wandb.log('eikonal_loss': (sdf_loss * self.sdf_weight).data.cpu().numpy())
+        self.wandb.log('learning_rate': cur_lr)
 
-        return losses.avg, losses.avg,iterations
-
-
-
+        return losses.avg, losses.avg, iterations
 
     def validate(self,summary_writer,epoch,vis=False):
         
@@ -308,7 +311,6 @@ class DisparityTrainer(object):
             right_input_pad = F.pad(right_input,pad=pad)
 
 
-
             with torch.no_grad():
                 
                 start_time = time.perf_counter()
@@ -340,7 +342,7 @@ class DisparityTrainer(object):
             batch_time.update(time.time() - end)
             end = time.time()
             
-            if i % 10 == 0:
+            if i % self.summary_freq == 0:
                 logger.info('Test: [{0}/{1}]\t Time {2}\t EPE {3}'
                       .format(i, len(self.test_loader), batch_time.val, flow2_EPEs.val))
             
@@ -350,8 +352,12 @@ class DisparityTrainer(object):
         
         
         logger.info(' * avg inference time {:.3f}'.format(inference_time / img_nums))
-        return flow2_EPEs.avg
 
+        self.wandb.log('val_epe': flow2_EPEs.avg)
+        self.wandb.log('val_p1': P1_error.avg)
+
+        return flow2_EPEs.avg
+        
 
     def get_model(self):
         return self.net.state_dict()

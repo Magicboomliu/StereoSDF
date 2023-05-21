@@ -103,6 +103,7 @@ class StereoDataset(Dataset):
 
             self.samples.append(sample)
 
+        print('number of training data: ', len(self.samples))
 
     def __getitem__(self, index):
         sample = {}
@@ -122,8 +123,6 @@ class StereoDataset(Dataset):
             w = sample['gt_disp'].shape[-1]
             sample['occu_left'] = compute_left_occ_region(w=w,disp=sample['gt_disp'])
             
-
-
         if self.mode=='test' or self.mode=='val':
             # Image Crop Operation
             left_im = read_kitti_image_step1(sample_path['left']) #[H,W,3]

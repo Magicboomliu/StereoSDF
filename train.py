@@ -10,6 +10,8 @@ import torch.backends.cudnn as cudnn
 from utils.common import *
 from trainfiles.trainer_stereo import DisparityTrainer
 
+import wandb
+
 from torch.utils.tensorboard import SummaryWriter
 cudnn.benchmark = True
 
@@ -21,6 +23,7 @@ def save_checkpoint(state, is_best, filename='checkpoint.pth'):
 
 '''  Main Function to train the model'''
 def main(opt):
+
     # load the training loss scheme
     loss_json = load_loss_scheme(opt.loss)
     train_round = loss_json["round"]
@@ -29,11 +32,22 @@ def main(opt):
     epoches = loss_json["epoches"]
     logger.info(loss_weights)
     
+    # init wandb
+    wandb.init(
+        project = 'stereo_sdf',
+        config = {
+            'learning_rate' = opt.lr,
+            'training_epochs' = train_round * epoches,
+            'sdf_weight' = opt.sdf_weight,
+            'model' = opt.model,
+        }
+    )
+    
     # initialize a trainer
     trainer = DisparityTrainer(opt.lr, opt.devices, 
                                opt.dataset, opt.trainlist, opt.vallist, 
                                opt.datapath, opt.batch_size, opt.maxdisp,opt.use_deform,opt.pretrain,opt.model, 
-                               test_batch=opt.test_batch,initial_pretrain=opt.initial_pretrain)
+                               test_batch=opt.test_batch,initial_pretrain=opt.initial_pretrain, wandb=wandb,opt=opt)
     
     # validate the pretrained model on test data
     best_EPE = -1
@@ -48,7 +62,7 @@ def main(opt):
     iterations = 0
     
     for r in range(opt.startRound, train_round):
-    
+        
         end_epoch = epoches[r]
 
         logger.info('round %d: %s' % (r, str(loss_weights[r])))
@@ -79,7 +93,8 @@ def main(opt):
         
         start_epoch = 0
 
-
+    wandb.finish()
+    
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -112,7 +127,12 @@ if __name__ == '__main__':
     parser.add_argument('--save_logdir',type=str,help='tensorboard log files saved path',default='experiments_logdirs')
     parser.add_argument('--pretrain',type=str,help='Load pretrain model for fine-tuning',default='None')
     parser.add_argument('--initial_pretrain',type=str,help='Load Part of the weight',default='None')
+
+    # additional parameters
+    parser.add_argument('--summary_freq', type=int, default=100, help='summary frequency')
+    parser.add_argument('--sdf_weight', type=float, default=0.01, help='loss weight for sdf eikonal regularization')
     opt = parser.parse_args()
+
     print("Use Deformable Conv ? :",opt.use_deform)
     try:
         os.makedirs(opt.outf)

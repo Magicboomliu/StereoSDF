@@ -1,3 +1,4 @@
 *.pth
 models_saved
 experiments_logdir
+**/__pycache__

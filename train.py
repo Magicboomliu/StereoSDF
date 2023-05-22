@@ -33,13 +33,17 @@ def main(opt):
     logger.info(loss_weights)
     
     # init wandb
+    group_name = 'model_%s_sdf_%s' % (opt.model, opt.sdf_type)
+    name = 'sdf_weight_%.2f_lr_%.3f'
     wandb.init(
         project = 'stereo_sdf',
+        group = group_name,
+        name = name,
         config = {
-            'learning_rate' = opt.lr,
-            'training_epochs' = train_round * epoches,
-            'sdf_weight' = opt.sdf_weight,
-            'model' = opt.model,
+            'learning_rate' : opt.lr,
+            'training_epochs' : train_round * epoches,
+            'sdf_weight' : opt.sdf_weight,
+            'model' : opt.model,
         }
     )
     
@@ -131,6 +135,7 @@ if __name__ == '__main__':
     # additional parameters
     parser.add_argument('--summary_freq', type=int, default=100, help='summary frequency')
     parser.add_argument('--sdf_weight', type=float, default=0.01, help='loss weight for sdf eikonal regularization')
+    parser.add_argument('--sdf_type', type=str, default='2D_conv', help='cost volume process method for sdf regression')
     opt = parser.parse_args()
 
     print("Use Deformable Conv ? :",opt.use_deform)

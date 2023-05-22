@@ -159,7 +159,6 @@ class StereoNetSDF(nn.Module):
         if self.sdf_type in ["2D_conv","MLP"]:
             est_sdf = self.sdf_filter(cost_volume)
         
-        
         x = F.softmax(cost_volume, dim=1)
         d = torch.arange(0, self.max_disp, device=x.device, dtype=x.dtype)
         x = torch.sum(x * d.view(1, -1, 1, 1), dim=1, keepdim=True)

@@ -14,13 +14,16 @@ trainlist=filenames/kitti_raw_complete.txt
 vallist=filenames/KITTI_2015_val.txt
 startR=0
 startE=0
-batchSize=8
+batchSize=3
 testbatch=1
 maxdisp=-1
 save_logdir=experiments_logdir/$pretrain_name
 model=$pretrain_name
 pretrain=none
 initial_pretrain=none
+sdf_type=3D_conv
+summary_freq=10
+sdf_weight=0.01
 
 python3 -W ignore train.py --cuda --loss $loss --lr $lr \
                --outf $outf_model --logFile $logf \
@@ -33,7 +36,10 @@ python3 -W ignore train.py --cuda --loss $loss --lr $lr \
                --manualSeed 1024 --test_batch $testbatch \
                --save_logdir $save_logdir \
                --pretrain $pretrain \
-               --initial_pretrain $initial_pretrain
+               --initial_pretrain $initial_pretrain \
+               --sdf_type $sdf_type \
+               --summary_freq $summary_freq \
+               --sdf_weight $sdf_weight
 }
 
 TRAIN_KITTI

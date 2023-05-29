@@ -46,6 +46,12 @@ class DisparityTrainer(object):
         self.devices = [int(item) for item in devices.split(',')]
         ngpu = len(devices)
         self.ngpu = ngpu
+
+        self.summary_freq = kwargs['opt'].summary_freq
+        self.sdf_weight = kwargs['opt'].sdf_weight
+        self.sdf_type = kwargs['opt'].sdf_type
+        
+    
         self.trainlist = trainlist
         self.vallist = vallist
         self.dataset = dataset
@@ -62,9 +68,7 @@ class DisparityTrainer(object):
         self.initialize()
         self.wandb = wandb
         # additional parameters
-        self.summary_freq = kwargs['opt'].summary_freq
-        self.sdf_weight = kwargs['opt'].sdf_weight
-        self.sdf_type = kwargs['opt'].sdf_type
+
     
     # Get Dataset Here
     def _prepare_dataset(self):
@@ -274,9 +278,11 @@ class DisparityTrainer(object):
                     data_time=data_time, loss=losses))
             
         # update training logs
-        self.wandb.log({'photometric_loss': photo_loss.data.cpu().numpy()})
-        self.wandb.log({'eikonal_loss': (sdf_loss * self.sdf_weight).data.cpu().numpy()})
-        self.wandb.log({'learning_rate': cur_lr})
+        if self.wandb is not None:
+        
+            self.wandb.log({'photometric_loss': photo_loss.data.cpu().numpy()})
+            self.wandb.log({'eikonal_loss': (sdf_loss * self.sdf_weight).data.cpu().numpy()})
+            self.wandb.log({'learning_rate': cur_lr})
 
         return losses.avg, losses.avg, iterations
 
@@ -354,8 +360,9 @@ class DisparityTrainer(object):
         
         logger.info(' * avg inference time {:.3f}'.format(inference_time / img_nums))
 
-        self.wandb.log({'val_epe': flow2_EPEs.avg})
-        self.wandb.log({'val_p1': P1_errors.avg})
+        if self.wandb is not None:
+            self.wandb.log({'val_epe': flow2_EPEs.avg})
+            self.wandb.log({'val_p1': P1_errors.avg})
 
         return flow2_EPEs.avg
         

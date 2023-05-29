@@ -32,26 +32,34 @@ def main(opt):
     epoches = loss_json["epoches"]
     logger.info(loss_weights)
     
-    # init wandb
-    group_name = 'model_%s_sdf_%s' % (opt.model, opt.sdf_type)
-    name = 'sdf_weight_%.2f_lr_%.3f'
-    wandb.init(
-        project = 'stereo_sdf',
-        group = group_name,
-        name = name,
-        config = {
-            'learning_rate' : opt.lr,
-            'training_epochs' : train_round * epoches,
-            'sdf_weight' : opt.sdf_weight,
-            'model' : opt.model,
-        }
-    )
+    use_wandb = False
+    
+    
+    if use_wandb == True:
+    
+        # init wandb
+        group_name = 'model_%s_sdf_%s' % (opt.model, opt.sdf_type)
+        name = 'sdf_weight_%.2f_lr_%.3f'
+        wandb.init(
+            project = 'stereo_sdf',
+            group = group_name,
+            name = name,
+            config = {
+                'learning_rate' : opt.lr,
+                'training_epochs' : train_round * epoches,
+                'sdf_weight' : opt.sdf_weight,
+                'model' : opt.model,
+            }
+        )
+    else:
+        wandb = None
+    
     
     # initialize a trainer
     trainer = DisparityTrainer(opt.lr, opt.devices, 
                                opt.dataset, opt.trainlist, opt.vallist, 
                                opt.datapath, opt.batch_size, opt.maxdisp,opt.use_deform,opt.pretrain,opt.model, 
-                               test_batch=opt.test_batch,initial_pretrain=opt.initial_pretrain, wandb=wandb,opt=opt)
+                               test_batch=opt.test_batch,initial_pretrain=opt.initial_pretrain, wandb=None,opt=opt)
     
     # validate the pretrained model on test data
     best_EPE = -1

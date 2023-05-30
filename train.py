@@ -35,11 +35,12 @@ def main(opt):
     use_wandb = False
     
     
-    if use_wandb == True:
-    
+    if use_wandb==True:
+        
+        import wandb
         # init wandb
         group_name = 'model_%s_sdf_%s' % (opt.model, opt.sdf_type)
-        name = 'sdf_weight_%.2f_lr_%.3f'
+        name = 'sdf_weight_%.2f_lr_%f' % (opt.sdf_weight, opt.lr)
         wandb.init(
             project = 'stereo_sdf',
             group = group_name,
@@ -59,7 +60,7 @@ def main(opt):
     trainer = DisparityTrainer(opt.lr, opt.devices, 
                                opt.dataset, opt.trainlist, opt.vallist, 
                                opt.datapath, opt.batch_size, opt.maxdisp,opt.use_deform,opt.pretrain,opt.model, 
-                               test_batch=opt.test_batch,initial_pretrain=opt.initial_pretrain, wandb=None,opt=opt)
+                               test_batch=opt.test_batch,initial_pretrain=opt.initial_pretrain, wandb=wandb,opt=opt)
     
     # validate the pretrained model on test data
     best_EPE = -1

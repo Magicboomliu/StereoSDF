@@ -65,9 +65,9 @@ class DisparityTrainer(object):
         self.epe = Disparity_EPE_Loss
         self.p1_error = P1_metric
         self.model = model
-        self.initialize()
         self.wandb = wandb
-        # additional parameters
+        #assert self.wandb is not None
+        self.initialize()
 
     
     # Get Dataset Here
@@ -202,6 +202,7 @@ class DisparityTrainer(object):
         cur_lr = self.adjust_learning_rate(epoch)
         logger.info("learning rate of epoch %d: %f." % (epoch, cur_lr))
         summary_writer.add_scalar("Learning_Rate",cur_lr,epoch+1)
+        sdf_loss = None
 
         for i_batch, sample_batched in enumerate(self.train_loader):
             left_input = torch.autograd.Variable(sample_batched['img_left'].cuda(), requires_grad=False)
@@ -221,8 +222,9 @@ class DisparityTrainer(object):
             
             if self.model=='StereoNet':
                 # Loss Here
-                loss = MultiScaleLoss(weights=[0.8,1.0,1.0],disp_pyramid=pyramid_disp,
+                photo_loss = MultiScaleLoss(weights=[0.8,1.0,1.0],disp_pyramid=pyramid_disp,
                                   left_img=left_input,right_img=right_input)
+                loss = photo_loss
             
             elif self.model=='StereoNetSDF':
                 photo_loss = MultiScaleLoss(weights=[0.8,1.0,1.0],disp_pyramid=pyramid_disp,
@@ -277,12 +279,13 @@ class DisparityTrainer(object):
                     sdf_losses = eki_loss_meter,
                     data_time=data_time, loss=losses))
             
-        # update training logs
-        if self.wandb is not None:
-        
-            self.wandb.log({'photometric_loss': photo_loss.data.cpu().numpy()})
-            self.wandb.log({'eikonal_loss': (sdf_loss * self.sdf_weight).data.cpu().numpy()})
-            self.wandb.log({'learning_rate': cur_lr})
+            # update training logs
+
+            if self.wandb is not None:
+                self.wandb.log({'photometric_loss': photo_loss.data.cpu().numpy()})
+                if sdf_loss is not None:
+                    self.wandb.log({'eikonal_loss': (sdf_loss * self.sdf_weight).data.cpu().numpy()})
+                self.wandb.log({'learning_rate': cur_lr})
 
         return losses.avg, losses.avg, iterations
 

@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from math import exp
 import sys
 sys.path.append("..")
-from losses.metric import *
+from losses.metirc import *
 
 
 
@@ -175,7 +175,10 @@ def ssim(img1, img2, window_size=11):
 
 def PAMStereoLoss(img_left,img_right,disp,att,att_cycle,valid_mask,disp_gt):
     
-    mask_left = ((disp_gt > 0) & (disp_gt < 192)).float()
+    if disp_gt is not None:
+        mask_left = ((disp_gt > 0) & (disp_gt < 192)).float()
+    else:
+        mask_left = torch.ones_like(disp)
     mask_right = torch.ones_like(mask_left)
     
     # loss-p

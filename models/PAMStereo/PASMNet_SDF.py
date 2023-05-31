@@ -46,9 +46,9 @@ class ResBlock1x1(nn.Module):
         return x + input
 
 
-class PASMnet(nn.Module):
+class PASMnetSDF(nn.Module):
     def __init__(self,sdf_type='MLP',max_disp=192):
-        super(PASMnet, self).__init__()
+        super(PASMnetSDF, self).__init__()
         ###############################################################
         ## scale     #  1  #  1/2  #  1/4  #  1/8  #  1/16  #  1/32  ##
         ## channels  #  16 #  32   #  64   #  96   #  128   #  160   ##
@@ -346,7 +346,7 @@ if __name__=="__main__":
     right_sample = torch.randn(1,3,320,640).cuda()
     target_smaple = torch.randn(1,1,320,640).cuda()
     
-    pasmet = PASMnet().cuda()
+    pasmet = PASMnetSDF().cuda()
     
     disp,attn_list,att_cycle,valid_mask,est_sdf = pasmet(left_sample,right_sample)
     

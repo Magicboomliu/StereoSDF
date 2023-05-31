@@ -12,19 +12,22 @@ from utils.common import logger, check_path, write_pfm,count_parameters
 from models.Stereonet.stereonet import StereoNet
 from models.Stereonet.stereonet_sdf import StereoNetSDF
 from models.Stereonet.stereonet_sdf_render import StereoNetSDFRender
+from models.PAMStereo.PASMnet import PASMnet
+from models.PAMStereo.PASMNet_SDF import PASMnetSDF
 from dataloader.kitti_loader import StereoDataset
+
 from dataloader import kitti_transform
 
 # metric
 from utils.metric import P1_metric,P1_Value,D1_metric,Disparity_EPE_Loss
 from utils.metric import compute_iou,Occlusion_EPE
 
-
 import time
 import os
 from torch.autograd import Variable
 
 from losses.unsupervised_loss import loss_disp_unsupervised,MultiScaleLoss,Eki_Loss
+from losses.pam_loss import PAMStereoLoss
 
 
 # IMAGENET NORMALIZATION
@@ -119,6 +122,10 @@ class DisparityTrainer(object):
             self.net = StereoNetSDF(sdf_type=self.sdf_type)
         elif self.model == 'StereoNetSDFRender':
             self.net = StereoNetSDFRender(sdf_type=self.sdf_type, use_sdf_render=True)
+        elif self.model == "PAM":
+            self.net = PASMnet()
+        elif self.model =="PAMSDF":
+            self.net = PASMnetSDF(sdf_type='MLP',max_disp=192)
         else:
             raise NotImplementedError
         
@@ -229,7 +236,13 @@ class DisparityTrainer(object):
                 est_sdf = output_staff['sdf']
                 rendered_left = output_staff['rendered_left']
                 weights_sum = output_staff['weights_sum']
+            elif self.model == "PAM":
+                output,attn_list,att_cycle,valid_mask = self.net(left_input,right_input,192)
             
+            elif self.model =="PAMSDF":
+                output,attn_list,att_cycle,valid_mask,est_sdf= self.net(left_input,right_input,192)
+                
+                
             if self.model=='StereoNet':
                 # Loss Here
                 photo_loss = MultiScaleLoss(weights=[0.8,1.0,1.0],disp_pyramid=pyramid_disp,
@@ -261,6 +274,27 @@ class DisparityTrainer(object):
                 render_loss_meter.update(sdf_render_loss.data.item(), left_input.size(0))
                 eki_loss_meter.update(sdf_loss.data.item(),left_input.size(0))
                 summary_writer.add_scalar("eki_loss",eki_loss_meter.val,iterations+1)
+            elif self.model =='PAM':
+                loss, loss_P, loss_S, loss_PAM = PAMStereoLoss(left_input,right_input,disp=output,att=attn_list,
+                                                               att_cycle=att_cycle,valid_mask=valid_mask,disp_gt=None)
+                photo_loss = loss
+                
+            elif self.model == "PAMSDF":
+                loss, loss_P, loss_S, loss_PAM = PAMStereoLoss(left_input,right_input,disp=output,att=attn_list,
+                                                               att_cycle=att_cycle,valid_mask=valid_mask,disp_gt=None)
+                sdf_loss = Eki_Loss(est_sdf=est_sdf)
+                
+                photo_loss = loss
+                
+                # FIXME : beta 
+                # beta = 0.01
+                loss = loss + sdf_loss * self.sdf_weight
+                
+                eki_loss_meter.update(sdf_loss.data.item(),left_input.size(0))
+                summary_writer.add_scalar("eki_loss",eki_loss_meter.val,iterations+1)
+                
+            else:
+                raise NotImplementedError
                 
             
             if type(loss) is list or type(loss) is tuple:
@@ -316,6 +350,30 @@ class DisparityTrainer(object):
                     sdf_losses = eki_loss_meter,
                     render_losses = render_loss_meter,
                     data_time=data_time, loss=losses))
+                    
+            elif self.model=='PAM':
+                    if i_batch % self.summary_freq == 0:
+                        logger.info('this is round %d', round)
+                        logger.info('Epoch: [{0}][{1}/{2}]\t'
+                        'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
+                        'Data {data_time.val:.3f} ({data_time.avg:.3f})\t'
+                        'Loss {loss.val:.3f} ({loss.avg:.3f})\t'.format(
+                        epoch, i_batch, self.num_batches_per_epoch, 
+                        batch_time=batch_time,
+                        data_time=data_time, loss=losses))
+            elif self.model=='PAMSDF':
+                if i_batch % self.summary_freq == 0:
+                    logger.info('this is round %d', round)
+                    logger.info('Epoch: [{0}][{1}/{2}]\t'
+                    'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
+                    'Data {data_time.val:.3f} ({data_time.avg:.3f})\t'
+                    'Sdf_loss {sdf_losses.val:.3f} ({sdf_losses.avg:.3f})\t'
+                    'Loss {loss.val:.3f} ({loss.avg:.3f})\t'.format(
+                    epoch, i_batch, self.num_batches_per_epoch, 
+                    batch_time=batch_time,
+                    sdf_losses = eki_loss_meter,
+                    data_time=data_time, loss=losses))
+            
             
             # update training logs
 
@@ -363,12 +421,11 @@ class DisparityTrainer(object):
                 
                 start_time = time.perf_counter()
                 # Get the predicted disparity
-                if self.model=="StereoNet":
+                if self.model in ["StereoNet","StereoNetSDF","StereoNetSDFRender"]:
                     output = self.net(left_input_pad,right_input_pad)['disp']
-                elif self.model =='StereoNetSDF':
-                    output = self.net(left_input_pad,right_input_pad)['disp']
-                elif self.model =='StereoNetSDFRender':
-                    output = self.net(left_input_pad,right_input_pad)['disp']
+
+                elif self.model in ["PAM","PAMSDF"]:
+                    output = self.net(left_input_pad,right_input_pad)
 
                 output = output[:,:,h_pad:,w_pad:]
                 assert output.shape ==target_disp.shape

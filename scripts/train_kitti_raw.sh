@@ -1,16 +1,18 @@
 TRAIN_KITTI(){
-pretrain_name=StereoNet
+pretrain_name=PAMSDF
 cd ..
 mkdir logs
 loss=config/loss_config_disp.json
 outf_model=models_saved/$pretrain_name
 logf=logs/$pretrain_name
-datapath=/data/public_dataset/KITTI_Raw_Data
+# datapath=/data/public_dataset/KITTI_Raw_Data
+datapath=/media/zliu/datagrid1/liu/kitti_stereo/kitti_2015
 datathread=0
 lr=2e-4
 devices=0
 dataset=KITTI
-trainlist=filenames/kitti_raw_complete.txt
+# trainlist=filenames/kitti_raw_complete.txt
+trainlist=filenames/KITTI_2015_train.txt
 vallist=filenames/KITTI_2015_train.txt
 startR=0
 startE=0
@@ -21,7 +23,7 @@ save_logdir=experiments_logdir/$pretrain_name
 model=$pretrain_name
 pretrain=none
 initial_pretrain=none
-sdf_type=3D_conv
+sdf_type=MLP
 summary_freq=10
 sdf_weight=0.01
 

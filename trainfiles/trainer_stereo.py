@@ -11,6 +11,7 @@ from utils.common import logger, check_path, write_pfm,count_parameters
 
 from models.Stereonet.stereonet import StereoNet
 from models.Stereonet.stereonet_sdf import StereoNetSDF
+from models.Stereonet.stereonet_sdf_render import StereoNetSDFRender
 from dataloader.kitti_loader import StereoDataset
 from dataloader import kitti_transform
 
@@ -116,6 +117,8 @@ class DisparityTrainer(object):
             self.net = StereoNet()
         elif self.model=='StereoNetSDF':
             self.net = StereoNetSDF(sdf_type=self.sdf_type)
+        elif self.model == 'StereoNetSDFRender':
+            self.net = StereoNetSDFRender(sdf_type=self.sdf_type, use_sdf_render=True)
         else:
             raise NotImplementedError
         
@@ -189,6 +192,7 @@ class DisparityTrainer(object):
         data_time = AverageMeter()    
         losses = AverageMeter()
         eki_loss_meter = AverageMeter()
+        render_loss_meter = AverageMeter()
 
         nums_samples = len(self.train_loader)
         train_count = 0
@@ -219,6 +223,12 @@ class DisparityTrainer(object):
                 output_staff = self.net(left_input,right_input)
                 pyramid_disp = output_staff["multi_scale"]
                 est_sdf = output_staff['sdf']
+            elif self.model == 'StereoNetSDFRender':
+                output_staff = self.net(left_input,right_input)
+                pyramid_disp = output_staff["multi_scale"]
+                est_sdf = output_staff['sdf']
+                rendered_left = output_staff['rendered_left']
+                weights_sum = output_staff['weights_sum']
             
             if self.model=='StereoNet':
                 # Loss Here
@@ -235,6 +245,20 @@ class DisparityTrainer(object):
                 # beta = 0.01
                 loss = photo_loss + sdf_loss * self.sdf_weight
                 
+                eki_loss_meter.update(sdf_loss.data.item(),left_input.size(0))
+                summary_writer.add_scalar("eki_loss",eki_loss_meter.val,iterations+1)
+            elif self.model == 'StereoNetSDFRender':
+                photo_loss = MultiScaleLoss(weights=[0.8,1.0,1.0],disp_pyramid=pyramid_disp,
+                                  left_img=left_input,right_img=right_input)
+                sdf_loss = Eki_Loss(est_sdf=est_sdf)
+                left_18 = F.interpolate(left_input, scale_factor=1/8, mode='bilinear', align_corners=False)
+                sdf_render_loss = F.l1_loss(left_18, rendered_left, size_average=True, reduction='mean')
+                
+                # FIXME : beta 
+                # beta = 0.01
+                loss = photo_loss + sdf_loss * self.sdf_weight + sdf_render_loss * 0.1
+                
+                render_loss_meter.update(sdf_render_loss.data.item(), left_input.size(0))
                 eki_loss_meter.update(sdf_loss.data.item(),left_input.size(0))
                 summary_writer.add_scalar("eki_loss",eki_loss_meter.val,iterations+1)
                 
@@ -277,6 +301,20 @@ class DisparityTrainer(object):
                     epoch, i_batch, self.num_batches_per_epoch, 
                     batch_time=batch_time,
                     sdf_losses = eki_loss_meter,
+                    data_time=data_time, loss=losses))
+            elif self.model == 'StereoNetSDFRender':
+                if i_batch % self.summary_freq == 0:
+                    logger.info('this is round %d', round)
+                    logger.info('Epoch: [{0}][{1}/{2}]\t'
+                    'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
+                    'Data {data_time.val:.3f} ({data_time.avg:.3f})\t'
+                    'Sdf_loss {sdf_losses.val:.3f} ({sdf_losses.avg:.3f})\t'
+                    'Render_loss {render_losses.val:.3f} ({render_losses.avg:.3f})\t'
+                    'Loss {loss.val:.3f} ({loss.avg:.3f})\t'.format(
+                    epoch, i_batch, self.num_batches_per_epoch, 
+                    batch_time=batch_time,
+                    sdf_losses = eki_loss_meter,
+                    render_losses = render_loss_meter,
                     data_time=data_time, loss=losses))
             
             # update training logs
@@ -328,6 +366,8 @@ class DisparityTrainer(object):
                 if self.model=="StereoNet":
                     output = self.net(left_input_pad,right_input_pad)['disp']
                 elif self.model =='StereoNetSDF':
+                    output = self.net(left_input_pad,right_input_pad)['disp']
+                elif self.model =='StereoNetSDFRender':
                     output = self.net(left_input_pad,right_input_pad)['disp']
 
                 output = output[:,:,h_pad:,w_pad:]

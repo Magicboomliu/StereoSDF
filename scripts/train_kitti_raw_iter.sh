@@ -42,7 +42,7 @@ CUDA_VISIBLE_DEVICES=0 python3 -W ignore train_iter.py --cuda --loss $loss --lr 
                --sdf_type $sdf_type \
                --summary_freq $summary_freq \
                --sdf_weight $sdf_weight \
-               --load_wandb \
+               --load_wandb
 }
 
 TRAIN_KITTI

@@ -55,8 +55,10 @@ class DisparityTrainer(object):
         self.sdf_weight = kwargs['opt'].sdf_weight
         self.sdf_type = kwargs['opt'].sdf_type
         self.optimizer = kwargs['opt'].optimizer 
-        self.lr_strategy = kwargs['opt'].lr_strategy
         self.num_steps = kwargs['opt'].num_steps
+        self.weight_decay = kwargs['opt'].weight_decay
+        self.val_freq = kwargs['opt'].val_freq
+        self.datathread = kwargs['opt'].datathread
     
         self.trainlist = trainlist
         self.vallist = vallist
@@ -97,22 +99,18 @@ class DisparityTrainer(object):
             train_dataset = StereoDataset(data_dir=self.datapath,train_datalist=self.trainlist,test_datalist=self.vallist,
                                     dataset_name='KITTI_mix',mode='train',transform=train_transform)
             
-
         self.img_height, self.img_width = train_dataset.get_img_size()
 
         self.scale_height, self.scale_width = test_dataset.get_scale_size()
 
-        datathread=4
-        if os.environ.get('datathread') is not None:
-            datathread = int(os.environ.get('datathread'))
-        logger.info("Use %d processes to load data..." % datathread)
+        logger.info("Use %d processes to load data..." % self.datathread)
 
         self.train_loader = DataLoader(train_dataset, batch_size = self.batch_size, \
-                                shuffle = True, num_workers = datathread, \
+                                shuffle = True, num_workers = self.datathread, \
                                 pin_memory = True)
 
         self.test_loader = DataLoader(test_dataset, batch_size = self.test_batch, \
-                                shuffle = False, num_workers = datathread, \
+                                shuffle = False, num_workers = self.datathread, \
                                 pin_memory = True)
         self.num_batches_per_epoch = len(self.train_loader)
 
@@ -294,6 +292,7 @@ class DisparityTrainer(object):
                 
                 # update training logs
                 if self.wandb is not None and total_steps % self.summary_freq == 0:
+                    logger.info('photometric loss is %.3f' % (photo_loss.data.cpu().numpy()))
                     self.wandb.log({'photometric_loss': photo_loss.data.cpu().numpy()})
                     if sdf_loss is not None:
                         self.wandb.log({'eikonal_loss': (sdf_loss * self.sdf_weight).data.cpu().numpy()})

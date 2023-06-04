@@ -3,3 +3,4 @@ models_saved
 experiments_logdir
 **/__pycache__
 wandb/*
+models/*

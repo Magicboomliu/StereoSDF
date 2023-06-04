@@ -1,0 +1,116 @@
+2023-06-04 19:28:46,542 [train_iter.py:125] INFO Configurations: Namespace(augment=0, batch_size=8, beta=0.999, cuda=True, datapath='/media/zliu/datagrid1/liu/kitti_stereo/kitti_2015', dataset='KITTI', devices='0', dynamic_lr=False, flowDiv=1.0, initial_pretrain='none', load_wandb=False, logFile='logs/PAMSDF', loss='config/loss_config_disp.json', lr=0.0002, manualSeed=1024, maxdisp=-1, model='PAMSDF', momentum=0.9, net='simplenet', num_steps=100000, optimizer='AdamW', outf='models_saved/PAMSDF', pretrain='none', save_logdir='experiments_logdir/PAMSDF', sdf_type='MLP', sdf_weight=0.01, showFreq=100, startEpoch=0, startRound=0, summary_freq=10, test_batch=2, trainlist='filenames/KITTI_2015_train.txt', trainmodel=None, use_deform=False, vallist='filenames/KITTI_2015_train.txt', weight_decay=0.0001, workers=8)
+2023-06-04 19:28:46,542 [train_iter.py:129] INFO Random Seed: 1024
+2023-06-04 19:28:46,593 [train_iter.py:33] INFO [[1.0, 0.8, 0.8, 0.6]]
+2023-06-04 19:29:22,628 [train_iter.py:125] INFO Configurations: Namespace(augment=0, batch_size=8, beta=0.999, cuda=True, datapath='/media/zliu/datagrid1/liu/kitti_stereo/kitti_2015', dataset='KITTI', devices='0', dynamic_lr=False, flowDiv=1.0, initial_pretrain='none', load_wandb=False, logFile='logs/PAMSDF', loss='config/loss_config_disp.json', lr=0.0002, manualSeed=1024, maxdisp=-1, model='PAMSDF', momentum=0.9, net='simplenet', num_steps=100000, optimizer='AdamW', outf='models_saved/PAMSDF', pretrain='none', save_logdir='experiments_logdir/PAMSDF', sdf_type='MLP', sdf_weight=0.01, showFreq=100, startEpoch=0, startRound=0, summary_freq=10, test_batch=2, trainlist='filenames/KITTI_2015_train.txt', trainmodel=None, use_deform=False, vallist='filenames/KITTI_2015_train.txt', weight_decay=0.0001, workers=8)
+2023-06-04 19:29:22,629 [train_iter.py:129] INFO Random Seed: 1024
+2023-06-04 19:29:22,679 [train_iter.py:33] INFO [[1.0, 0.8, 0.8, 0.6]]
+2023-06-04 19:29:22,681 [trainer_stereo_iter.py:107] INFO Use 4 processes to load data...
+2023-06-04 19:29:24,337 [trainer_stereo_iter.py:142] INFO Initial a new model...
+2023-06-04 19:30:29,741 [train_iter.py:125] INFO Configurations: Namespace(augment=0, batch_size=8, beta=0.999, cuda=True, datapath='/media/zliu/datagrid1/liu/kitti_stereo/kitti_2015', dataset='KITTI', devices='0', dynamic_lr=False, flowDiv=1.0, initial_pretrain='none', load_wandb=False, logFile='logs/PAMSDF', loss='config/loss_config_disp.json', lr=0.0002, manualSeed=1024, maxdisp=-1, model='PAMSDF', momentum=0.9, net='simplenet', num_steps=100000, optimizer='AdamW', outf='models_saved/PAMSDF', pretrain='none', save_logdir='experiments_logdir/PAMSDF', sdf_type='MLP', sdf_weight=0.01, showFreq=100, startEpoch=0, startRound=0, summary_freq=10, test_batch=2, trainlist='filenames/KITTI_2015_train.txt', trainmodel=None, use_deform=False, vallist='filenames/KITTI_2015_train.txt', weight_decay=0.0001, workers=8)
+2023-06-04 19:30:29,742 [train_iter.py:129] INFO Random Seed: 1024
+2023-06-04 19:30:29,788 [train_iter.py:33] INFO [[1.0, 0.8, 0.8, 0.6]]
+2023-06-04 19:30:29,790 [trainer_stereo_iter.py:108] INFO Use 4 processes to load data...
+2023-06-04 19:30:31,433 [trainer_stereo_iter.py:143] INFO Initial a new model...
+2023-06-04 19:33:37,113 [train_iter.py:125] INFO Configurations: Namespace(augment=0, batch_size=8, beta=0.999, cuda=True, datapath='/hdd/zsy_data/kitti_data', dataset='KITTI', devices='0', dynamic_lr=False, flowDiv=1.0, initial_pretrain='none', load_wandb=False, logFile='logs/PAMSDF', loss='config/loss_config_disp.json', lr=0.0002, manualSeed=1024, maxdisp=-1, model='PAMSDF', momentum=0.9, net='simplenet', num_steps=100000, optimizer='AdamW', outf='models_saved/PAMSDF', pretrain='none', save_logdir='experiments_logdir/PAMSDF', sdf_type='MLP', sdf_weight=0.01, showFreq=100, startEpoch=0, startRound=0, summary_freq=10, test_batch=2, trainlist='filenames/kitti_raw_complete.txt', trainmodel=None, use_deform=False, vallist='filenames/KITTI_2015_train.txt', weight_decay=0.0001, workers=8)
+2023-06-04 19:33:37,113 [train_iter.py:129] INFO Random Seed: 1024
+2023-06-04 19:33:37,160 [train_iter.py:33] INFO [[1.0, 0.8, 0.8, 0.6]]
+2023-06-04 19:33:37,288 [trainer_stereo_iter.py:108] INFO Use 4 processes to load data...
+2023-06-04 19:33:38,977 [trainer_stereo_iter.py:143] INFO Initial a new model...
+2023-06-04 19:36:37,896 [train_iter.py:126] INFO Configurations: Namespace(augment=0, batch_size=8, beta=0.999, cuda=True, datapath='/hdd/zsy_data/kitti_data', dataset='KITTI', devices='0', dynamic_lr=False, flowDiv=1.0, initial_pretrain='none', load_wandb=False, logFile='logs/PAMSDF', loss='config/loss_config_disp.json', lr=0.0002, manualSeed=1024, maxdisp=-1, model='PAMSDF', momentum=0.9, net='simplenet', num_steps=100000, optimizer='AdamW', outf='models_saved/PAMSDF', pretrain='none', save_logdir='experiments_logdir/PAMSDF', sdf_type='MLP', sdf_weight=0.01, showFreq=100, startEpoch=0, startRound=0, summary_freq=10, test_batch=2, trainlist='filenames/kitti_raw_complete.txt', trainmodel=None, use_deform=False, val_freq=10000, vallist='filenames/KITTI_2015_train.txt', weight_decay=0.0001, workers=8)
+2023-06-04 19:36:37,896 [train_iter.py:130] INFO Random Seed: 1024
+2023-06-04 19:36:37,950 [train_iter.py:33] INFO [[1.0, 0.8, 0.8, 0.6]]
+2023-06-04 19:36:38,075 [trainer_stereo_iter.py:108] INFO Use 4 processes to load data...
+2023-06-04 19:36:39,755 [trainer_stereo_iter.py:143] INFO Initial a new model...
+2023-06-04 19:37:21,311 [train_iter.py:126] INFO Configurations: Namespace(augment=0, batch_size=8, beta=0.999, cuda=True, datapath='/hdd/zsy_data/kitti_data', dataset='KITTI', devices='0', dynamic_lr=False, flowDiv=1.0, initial_pretrain='none', load_wandb=False, logFile='logs/PAMSDF', loss='config/loss_config_disp.json', lr=0.0002, manualSeed=1024, maxdisp=-1, model='PAMSDF', momentum=0.9, net='simplenet', num_steps=100000, optimizer='AdamW', outf='models_saved/PAMSDF', pretrain='none', save_logdir='experiments_logdir/PAMSDF', sdf_type='MLP', sdf_weight=0.01, showFreq=100, startEpoch=0, startRound=0, summary_freq=10, test_batch=2, trainlist='filenames/kitti_raw_complete.txt', trainmodel=None, use_deform=False, val_freq=10000, vallist='filenames/KITTI_2015_train.txt', weight_decay=0.0001, workers=8)
+2023-06-04 19:37:21,311 [train_iter.py:130] INFO Random Seed: 1024
+2023-06-04 19:37:21,363 [train_iter.py:33] INFO [[1.0, 0.8, 0.8, 0.6]]
+2023-06-04 19:37:21,495 [trainer_stereo_iter.py:109] INFO Use 4 processes to load data...
+2023-06-04 19:37:23,166 [trainer_stereo_iter.py:144] INFO Initial a new model...
+2023-06-04 19:40:28,462 [train_iter.py:126] INFO Configurations: Namespace(augment=0, batch_size=8, beta=0.999, cuda=True, datapath='/hdd/zsy_data/kitti_data', dataset='KITTI', devices='0', dynamic_lr=False, flowDiv=1.0, initial_pretrain='none', load_wandb=False, logFile='logs/PAMSDF', loss='config/loss_config_disp.json', lr=0.0002, manualSeed=1024, maxdisp=-1, model='PAMSDF', momentum=0.9, net='simplenet', num_steps=100000, optimizer='AdamW', outf='models_saved/PAMSDF', pretrain='none', save_logdir='experiments_logdir/PAMSDF', sdf_type='MLP', sdf_weight=0.01, showFreq=100, startEpoch=0, startRound=0, summary_freq=10, test_batch=2, trainlist='filenames/kitti_raw_complete.txt', trainmodel=None, use_deform=False, val_freq=10000, vallist='filenames/KITTI_2015_train.txt', weight_decay=0.0001, workers=8)
+2023-06-04 19:40:28,463 [train_iter.py:130] INFO Random Seed: 1024
+2023-06-04 19:40:28,519 [train_iter.py:33] INFO [[1.0, 0.8, 0.8, 0.6]]
+2023-06-04 19:41:36,418 [train_iter.py:127] INFO Configurations: Namespace(augment=0, batch_size=8, beta=0.999, cuda=True, datapath='/hdd/zsy_data/kitti_data', dataset='KITTI', datathread=4, devices='0', dynamic_lr=False, flowDiv=1.0, initial_pretrain='none', load_wandb=False, logFile='logs/PAMSDF', loss='config/loss_config_disp.json', lr=0.0002, manualSeed=1024, maxdisp=-1, model='PAMSDF', momentum=0.9, net='simplenet', num_steps=100000, optimizer='AdamW', outf='models_saved/PAMSDF', pretrain='none', save_logdir='experiments_logdir/PAMSDF', sdf_type='MLP', sdf_weight=0.01, showFreq=100, startEpoch=0, startRound=0, summary_freq=10, test_batch=2, trainlist='filenames/kitti_raw_complete.txt', trainmodel=None, use_deform=False, val_freq=10000, vallist='filenames/KITTI_2015_train.txt', weight_decay=0.0001, workers=8)
+2023-06-04 19:41:36,419 [train_iter.py:131] INFO Random Seed: 1024
+2023-06-04 19:41:36,465 [train_iter.py:33] INFO [[1.0, 0.8, 0.8, 0.6]]
+2023-06-04 19:41:36,594 [trainer_stereo_iter.py:106] INFO Use 4 processes to load data...
+2023-06-04 19:42:09,215 [train_iter.py:127] INFO Configurations: Namespace(augment=0, batch_size=8, beta=0.999, cuda=True, datapath='/hdd/zsy_data/kitti_data', dataset='KITTI', datathread=4, devices='0', dynamic_lr=False, flowDiv=1.0, initial_pretrain='none', load_wandb=False, logFile='logs/PAMSDF', loss='config/loss_config_disp.json', lr=0.0002, manualSeed=1024, maxdisp=-1, model='PAMSDF', momentum=0.9, net='simplenet', num_steps=100000, optimizer='AdamW', outf='models_saved/PAMSDF', pretrain='none', save_logdir='experiments_logdir/PAMSDF', sdf_type='MLP', sdf_weight=0.01, showFreq=100, startEpoch=0, startRound=0, summary_freq=10, test_batch=2, trainlist='filenames/kitti_raw_complete.txt', trainmodel=None, use_deform=False, val_freq=10000, vallist='filenames/KITTI_2015_train.txt', weight_decay=0.0001, workers=8)
+2023-06-04 19:42:09,216 [train_iter.py:131] INFO Random Seed: 1024
+2023-06-04 19:42:09,264 [train_iter.py:33] INFO [[1.0, 0.8, 0.8, 0.6]]
+2023-06-04 19:42:09,390 [trainer_stereo_iter.py:106] INFO Use 4 processes to load data...
+2023-06-04 19:42:11,091 [trainer_stereo_iter.py:141] INFO Initial a new model...
+2023-06-04 19:44:46,369 [train_iter.py:127] INFO Configurations: Namespace(augment=0, batch_size=8, beta=0.999, cuda=True, datapath='/hdd/zsy_data/kitti_data', dataset='KITTI', datathread=4, devices='0', dynamic_lr=False, flowDiv=1.0, initial_pretrain='none', load_wandb=False, logFile='logs/PAMSDF', loss='config/loss_config_disp.json', lr=0.0002, manualSeed=1024, maxdisp=-1, model='PAMSDF', momentum=0.9, net='simplenet', num_steps=100000, optimizer='AdamW', outf='models_saved/PAMSDF', pretrain='none', save_logdir='experiments_logdir/PAMSDF', sdf_type='MLP', sdf_weight=0.01, showFreq=100, startEpoch=0, startRound=0, summary_freq=10, test_batch=2, trainlist='filenames/kitti_raw_complete.txt', trainmodel=None, use_deform=False, val_freq=10000, vallist='filenames/KITTI_2015_train.txt', weight_decay=0.0001, workers=8)
+2023-06-04 19:44:46,370 [train_iter.py:131] INFO Random Seed: 1024
+2023-06-04 19:44:46,425 [train_iter.py:33] INFO [[1.0, 0.8, 0.8, 0.6]]
+2023-06-04 19:44:46,556 [trainer_stereo_iter.py:106] INFO Use 4 processes to load data...
+2023-06-04 19:44:48,235 [trainer_stereo_iter.py:141] INFO Initial a new model...
+2023-06-04 19:47:59,371 [train_iter.py:127] INFO Configurations: Namespace(augment=0, batch_size=8, beta=0.999, cuda=True, datapath='/hdd/zsy_data/kitti_data', dataset='KITTI', datathread=4, devices='0', dynamic_lr=False, flowDiv=1.0, initial_pretrain='none', load_wandb=False, logFile='logs/PAMSDF', loss='config/loss_config_disp.json', lr=0.0002, manualSeed=1024, maxdisp=-1, model='PAMSDF', momentum=0.9, net='simplenet', num_steps=100000, optimizer='AdamW', outf='models_saved/PAMSDF', pretrain='none', save_logdir='experiments_logdir/PAMSDF', sdf_type='MLP', sdf_weight=0.01, showFreq=100, startEpoch=0, startRound=0, summary_freq=10, test_batch=2, trainlist='filenames/kitti_raw_complete.txt', trainmodel=None, use_deform=False, val_freq=10000, vallist='filenames/KITTI_2015_train.txt', weight_decay=0.0001, workers=8)
+2023-06-04 19:47:59,371 [train_iter.py:131] INFO Random Seed: 1024
+2023-06-04 19:47:59,428 [train_iter.py:33] INFO [[1.0, 0.8, 0.8, 0.6]]
+2023-06-04 19:47:59,557 [trainer_stereo_iter.py:106] INFO Use 4 processes to load data...
+2023-06-04 19:48:01,213 [trainer_stereo_iter.py:141] INFO Initial a new model...
+2023-06-04 19:49:19,079 [train_iter.py:127] INFO Configurations: Namespace(augment=0, batch_size=8, beta=0.999, cuda=True, datapath='/hdd/zsy_data/kitti_data', dataset='KITTI', datathread=4, devices='0', dynamic_lr=False, flowDiv=1.0, initial_pretrain='none', load_wandb=True, logFile='logs/PAMSDF', loss='config/loss_config_disp.json', lr=0.0002, manualSeed=1024, maxdisp=-1, model='PAMSDF', momentum=0.9, net='simplenet', num_steps=100000, optimizer='AdamW', outf='models_saved/PAMSDF', pretrain='none', save_logdir='experiments_logdir/PAMSDF', sdf_type='MLP', sdf_weight=0.01, showFreq=100, startEpoch=0, startRound=0, summary_freq=10, test_batch=2, trainlist='filenames/kitti_raw_complete.txt', trainmodel=None, use_deform=False, val_freq=10000, vallist='filenames/KITTI_2015_train.txt', weight_decay=0.0001, workers=8)
+2023-06-04 19:49:19,079 [train_iter.py:131] INFO Random Seed: 1024
+2023-06-04 19:49:19,133 [train_iter.py:33] INFO [[1.0, 0.8, 0.8, 0.6]]
+2023-06-04 19:49:25,300 [trainer_stereo_iter.py:106] INFO Use 4 processes to load data...
+2023-06-04 19:49:27,013 [trainer_stereo_iter.py:141] INFO Initial a new model...
+2023-06-04 19:49:41,011 [trainer_stereo_iter.py:295] INFO photometric loss is 2.085
+2023-06-04 19:49:50,268 [trainer_stereo_iter.py:295] INFO photometric loss is 1.851
+2023-06-04 19:49:59,828 [trainer_stereo_iter.py:295] INFO photometric loss is 1.896
+2023-06-04 19:50:09,239 [trainer_stereo_iter.py:295] INFO photometric loss is 1.908
+2023-06-04 19:50:18,764 [trainer_stereo_iter.py:295] INFO photometric loss is 1.708
+2023-06-04 19:50:27,843 [trainer_stereo_iter.py:295] INFO photometric loss is 1.665
+2023-06-04 19:50:37,086 [trainer_stereo_iter.py:295] INFO photometric loss is 1.749
+2023-06-04 19:51:43,164 [train_iter.py:127] INFO Configurations: Namespace(augment=0, batch_size=8, beta=0.999, cuda=True, datapath='/hdd/zsy_data/kitti_data', dataset='KITTI', datathread=4, devices='0', dynamic_lr=False, flowDiv=1.0, initial_pretrain='none', load_wandb=True, logFile='logs/PAMSDF', loss='config/loss_config_disp.json', lr=0.0002, manualSeed=1024, maxdisp=-1, model='PAMSDF', momentum=0.9, net='simplenet', num_steps=100000, optimizer='AdamW', outf='models_saved/PAMSDF', pretrain='none', save_logdir='experiments_logdir/PAMSDF', sdf_type='MLP', sdf_weight=0.01, showFreq=100, startEpoch=0, startRound=0, summary_freq=10, test_batch=2, trainlist='filenames/kitti_raw_complete.txt', trainmodel=None, use_deform=False, val_freq=10000, vallist='filenames/KITTI_2015_train.txt', weight_decay=0.0001, workers=8)
+2023-06-04 19:51:43,164 [train_iter.py:131] INFO Random Seed: 1024
+2023-06-04 19:51:43,222 [train_iter.py:33] INFO [[1.0, 0.8, 0.8, 0.6]]
+2023-06-04 19:51:49,501 [trainer_stereo_iter.py:106] INFO Use 4 processes to load data...
+2023-06-04 19:51:51,172 [trainer_stereo_iter.py:141] INFO Initial a new model...
+2023-06-04 19:52:05,087 [trainer_stereo_iter.py:295] INFO photometric loss is 2.085
+2023-06-04 19:52:14,147 [trainer_stereo_iter.py:295] INFO photometric loss is 1.851
+2023-06-04 19:52:23,420 [trainer_stereo_iter.py:295] INFO photometric loss is 1.895
+2023-06-04 19:52:32,494 [trainer_stereo_iter.py:295] INFO photometric loss is 1.909
+2023-06-04 19:52:41,883 [trainer_stereo_iter.py:295] INFO photometric loss is 1.710
+2023-06-04 19:52:50,925 [trainer_stereo_iter.py:295] INFO photometric loss is 1.668
+2023-06-04 19:53:00,036 [trainer_stereo_iter.py:295] INFO photometric loss is 1.750
+2023-06-04 19:53:09,024 [trainer_stereo_iter.py:295] INFO photometric loss is 1.832
+2023-06-04 19:53:18,282 [trainer_stereo_iter.py:295] INFO photometric loss is 1.618
+2023-06-04 19:53:27,292 [trainer_stereo_iter.py:295] INFO photometric loss is 1.787
+2023-06-04 19:53:36,460 [trainer_stereo_iter.py:295] INFO photometric loss is 1.781
+2023-06-04 19:53:45,862 [trainer_stereo_iter.py:295] INFO photometric loss is 1.902
+2023-06-04 19:53:54,970 [trainer_stereo_iter.py:295] INFO photometric loss is 1.586
+2023-06-04 19:54:04,050 [trainer_stereo_iter.py:295] INFO photometric loss is 1.573
+2023-06-04 19:54:13,128 [trainer_stereo_iter.py:295] INFO photometric loss is 1.683
+2023-06-04 19:54:22,137 [trainer_stereo_iter.py:295] INFO photometric loss is 1.586
+2023-06-04 19:54:31,076 [trainer_stereo_iter.py:295] INFO photometric loss is 1.662
+2023-06-04 19:54:40,107 [trainer_stereo_iter.py:295] INFO photometric loss is 1.493
+2023-06-04 19:54:49,107 [trainer_stereo_iter.py:295] INFO photometric loss is 1.758
+2023-06-04 19:54:57,958 [trainer_stereo_iter.py:295] INFO photometric loss is 1.680
+2023-06-04 19:55:07,108 [trainer_stereo_iter.py:295] INFO photometric loss is 1.581
+2023-06-04 19:55:59,802 [train_iter.py:127] INFO Configurations: Namespace(augment=0, batch_size=8, beta=0.999, cuda=True, datapath='/hdd/zsy_data/kitti_data', dataset='KITTI', datathread=4, devices='0', dynamic_lr=False, flowDiv=1.0, initial_pretrain='none', load_wandb=True, logFile='logs/PAMSDF', loss='config/loss_config_disp.json', lr=0.0002, manualSeed=1024, maxdisp=-1, model='PAMSDF', momentum=0.9, net='simplenet', num_steps=100000, optimizer='AdamW', outf='models_saved/PAMSDF', pretrain='none', save_logdir='experiments_logdir/PAMSDF', sdf_type='MLP', sdf_weight=0.01, showFreq=100, startEpoch=0, startRound=0, summary_freq=10, test_batch=2, trainlist='filenames/kitti_raw_complete.txt', trainmodel=None, use_deform=False, val_freq=100, vallist='filenames/KITTI_2015_train.txt', weight_decay=0.0001, workers=8)
+2023-06-04 19:55:59,802 [train_iter.py:131] INFO Random Seed: 1024
+2023-06-04 19:55:59,857 [train_iter.py:33] INFO [[1.0, 0.8, 0.8, 0.6]]
+2023-06-04 19:56:05,956 [trainer_stereo_iter.py:106] INFO Use 4 processes to load data...
+2023-06-04 19:56:07,663 [trainer_stereo_iter.py:141] INFO Initial a new model...
+2023-06-04 19:56:21,728 [trainer_stereo_iter.py:295] INFO photometric loss is 2.084
+2023-06-04 19:56:30,982 [trainer_stereo_iter.py:295] INFO photometric loss is 1.852
+2023-06-04 19:56:40,312 [trainer_stereo_iter.py:295] INFO photometric loss is 1.894
+2023-06-04 19:56:49,555 [trainer_stereo_iter.py:295] INFO photometric loss is 1.907
+2023-06-04 19:56:59,202 [trainer_stereo_iter.py:295] INFO photometric loss is 1.709
+2023-06-04 19:57:08,657 [trainer_stereo_iter.py:295] INFO photometric loss is 1.666
+2023-06-04 19:57:18,118 [trainer_stereo_iter.py:295] INFO photometric loss is 1.748
+2023-06-04 19:57:27,481 [trainer_stereo_iter.py:295] INFO photometric loss is 1.831
+2023-06-04 19:57:37,069 [trainer_stereo_iter.py:295] INFO photometric loss is 1.616
+2023-06-04 19:57:46,448 [trainer_stereo_iter.py:295] INFO photometric loss is 1.787
+2023-06-04 19:57:48,067 [trainer_stereo_iter.py:378] INFO Test: [0/90]	 Time 1.614854335784912	 EPE 21.487428665161133
+2023-06-04 19:57:48,833 [trainer_stereo_iter.py:378] INFO Test: [10/90]	 Time 0.07159256935119629	 EPE 18.908674240112305
+2023-06-04 19:57:49,793 [trainer_stereo_iter.py:378] INFO Test: [20/90]	 Time 0.08860373497009277	 EPE 19.06441879272461
+2023-06-04 19:57:50,590 [trainer_stereo_iter.py:378] INFO Test: [30/90]	 Time 0.07743287086486816	 EPE 28.30868911743164
+2023-06-04 19:57:51,360 [trainer_stereo_iter.py:378] INFO Test: [40/90]	 Time 0.07552576065063477	 EPE 19.58925437927246
+2023-06-04 19:57:52,130 [trainer_stereo_iter.py:378] INFO Test: [50/90]	 Time 0.07624173164367676	 EPE 20.180315017700195
+2023-06-04 19:57:52,843 [trainer_stereo_iter.py:378] INFO Test: [60/90]	 Time 0.07090115547180176	 EPE 17.618675231933594
+2023-06-04 19:57:53,571 [trainer_stereo_iter.py:378] INFO Test: [70/90]	 Time 0.07080960273742676	 EPE 21.175331115722656
+2023-06-04 19:57:54,333 [trainer_stereo_iter.py:378] INFO Test: [80/90]	 Time 0.07484912872314453	 EPE 18.037296295166016
+2023-06-04 19:57:55,239 [trainer_stereo_iter.py:382] INFO  * DISP EPE 20.798
+2023-06-04 19:57:55,240 [trainer_stereo_iter.py:383] INFO  * P1_error 0.994
+2023-06-04 19:57:55,240 [trainer_stereo_iter.py:385] INFO  * avg inference time 0.041
+2023-06-04 19:58:05,062 [trainer_stereo_iter.py:295] INFO photometric loss is 1.781

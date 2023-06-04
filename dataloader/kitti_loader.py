@@ -103,8 +103,6 @@ class StereoDataset(Dataset):
 
             self.samples.append(sample)
 
-        print('number of training data: ', len(self.samples))
-
     def __getitem__(self, index):
         sample = {}
         sample_path = self.samples[index]

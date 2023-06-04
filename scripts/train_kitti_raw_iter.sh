@@ -6,13 +6,13 @@ loss=config/loss_config_disp.json
 outf_model=models_saved/$pretrain_name
 logf=logs/$pretrain_name
 # datapath=/data/public_dataset/KITTI_Raw_Data
-datapath=/media/zliu/datagrid1/liu/kitti_stereo/kitti_2015
-datathread=0
+datapath=/hdd/zsy_data/kitti_data
+datathread=4
 lr=2e-4
 devices=0
 dataset=KITTI
-# trainlist=filenames/kitti_raw_complete.txt
-trainlist=filenames/KITTI_2015_train.txt
+trainlist=filenames/kitti_raw_complete.txt
+# trainlist=filenames/KITTI_2015_train.txt    
 vallist=filenames/KITTI_2015_train.txt
 startR=0
 startE=0
@@ -42,6 +42,7 @@ CUDA_VISIBLE_DEVICES=0 python3 -W ignore train_iter.py --cuda --loss $loss --lr 
                --sdf_type $sdf_type \
                --summary_freq $summary_freq \
                --sdf_weight $sdf_weight \
+               --load_wandb \
 }
 
 TRAIN_KITTI

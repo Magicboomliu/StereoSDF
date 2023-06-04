@@ -37,7 +37,7 @@ def main(opt):
     if use_wandb==True:
         import wandb
         # init wandb
-        group_name = 'model_%s_sdf_%s' % (opt.model, opt.sdf_type)
+        group_name = 'model_%s_sdf_%s_cos_lr' % (opt.model, opt.sdf_type)
         name = 'sdf_weight_%.2f_lr_%f' % (opt.sdf_weight, opt.lr)
         wandb.init(
             project = 'stereo_sdf',
@@ -104,7 +104,7 @@ if __name__ == '__main__':
     parser.add_argument('--initial_pretrain',type=str,help='Load Part of the weight',default='None')
 
     # additional parameters
-    parser.add_argument('--summary_freq', type=int, default=100, help='summary frequency')
+    parser.add_argument('--summary_freq', type=int, default=10, help='summary frequency')
     parser.add_argument('--sdf_weight', type=float, default=0.01, help='loss weight for sdf eikonal regularization')
     parser.add_argument('--sdf_type', type=str, default='2D_conv', help='cost volume process method for sdf regression')
     parser.add_argument('--optimizer', type=str, default='AdamW', help='indicates the optimizer for training')
@@ -112,6 +112,8 @@ if __name__ == '__main__':
     parser.add_argument('--dynamic_lr', action='store_true', help='launch dynamic lr strategy')
     parser.add_argument('--load_wandb', action='store_true', help='apply wandb for summary')
     parser.add_argument('--num_steps', type=int, default=100000, help='total steps for training')
+    parser.add_argument('--val_freq', type=int, default=10000, help='validation frequency')
+    parser.add_argument('--datathread', type=int, default=4, help='numworkers for dataloader')
     opt = parser.parse_args()
 
     print("Use Deformable Conv ? :",opt.use_deform)

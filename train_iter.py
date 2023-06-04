@@ -8,7 +8,7 @@ import logging
 import torch.nn as nn
 import torch.backends.cudnn as cudnn
 from utils.common import *
-from trainfiles.trainer_stereo import DisparityTrainer
+from trainfiles.trainer_stereo_iter import DisparityTrainer
 
 import wandb
 
@@ -32,10 +32,9 @@ def main(opt):
     epoches = loss_json["epoches"]
     logger.info(loss_weights)
     
-    use_wandb = False
+    use_wandb = opt.load_wandb
     
     if use_wandb==True:
-        
         import wandb
         # init wandb
         group_name = 'model_%s_sdf_%s' % (opt.model, opt.sdf_type)
@@ -65,46 +64,10 @@ def main(opt):
     best_EPE = -1
     best_index = 0
     summary_writer = SummaryWriter(opt.save_logdir)
-    start_epoch = opt.startEpoch 
-
-    if trainer.is_pretrain:
-        pass
-        # best_EPE = trainer.validate(summary_writer=summary_writer,epoch=start_epoch)
-
-    iterations = 0
+    start_epoch = opt.startEpoch
     
-    for r in range(opt.startRound, train_round):
-        
-        end_epoch = epoches[r]
-
-        logger.info('round %d: %s' % (r, str(loss_weights[r])))
-        logger.info('num of epoches: %d' % end_epoch)
-        logger.info('\t'.join(['epoch', 'time_stamp', 'train_loss', 'train_EPE', 'EPE', 'lr']))
-        
-        for i in range(start_epoch, end_epoch):
-            #val_EPE = trainer.validate(summary_writer,i)
-            avg_loss, avg_EPE,iterations = trainer.train_one_epoch(i, r,iterations,summary_writer)
-            val_EPE = trainer.validate(summary_writer,i)
-            is_best = best_EPE < 0 or val_EPE < best_EPE
-
-            if is_best:
-                best_EPE = val_EPE
-                best_index = i
-            
-            if i%5==0:
-                save_checkpoint({
-                    'round': r + 1,
-                    'epoch': i + 1,
-                    'arch': 'dispnet',
-                    'state_dict': trainer.get_model(),
-                    'best_EPE': best_EPE,
-                }, is_best, '%s_%d_%d_%.3f.pth' % (opt.net, r, i, val_EPE))
-        
-            logger.info('Validation[epoch:%d]: '%i+'\t'.join([datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"), str(avg_loss), str(avg_EPE), str(val_EPE), str(trainer.current_lr)]))
-            logger.info("min epe from %d epoch" % (best_index))
-        
-        start_epoch = 0
-
+    # load training process
+    trainer.launch_training()
     wandb.finish()
     
 
@@ -147,6 +110,8 @@ if __name__ == '__main__':
     parser.add_argument('--optimizer', type=str, default='AdamW', help='indicates the optimizer for training')
     parser.add_argument('--weight_decay', default=1e-4, type=float)
     parser.add_argument('--dynamic_lr', action='store_true', help='launch dynamic lr strategy')
+    parser.add_argument('--load_wandb', action='store_true', help='apply wandb for summary')
+    parser.add_argument('--num_steps', type=int, default=100000, help='total steps for training')
     opt = parser.parse_args()
 
     print("Use Deformable Conv ? :",opt.use_deform)

@@ -34,7 +34,6 @@ def main(opt):
     
     use_wandb = False
     
-    
     if use_wandb==True:
         
         import wandb
@@ -50,11 +49,11 @@ def main(opt):
                 'training_epochs' : train_round * epoches,
                 'sdf_weight' : opt.sdf_weight,
                 'model' : opt.model,
+                'entity': 'sterer-sdf'
             }
         )
     else:
         wandb = None
-    
     
     # initialize a trainer
     trainer = DisparityTrainer(opt.lr, opt.devices, 
@@ -145,6 +144,9 @@ if __name__ == '__main__':
     parser.add_argument('--summary_freq', type=int, default=100, help='summary frequency')
     parser.add_argument('--sdf_weight', type=float, default=0.01, help='loss weight for sdf eikonal regularization')
     parser.add_argument('--sdf_type', type=str, default='2D_conv', help='cost volume process method for sdf regression')
+    parser.add_argument('--optimizer', type=str, default='AdamW', help='indicates the optimizer for training')
+    parser.add_argument('--weight_decay', default=1e-4, type=float)
+    parser.add_argument('--dynamic_lr', action='store_true', help='launch dynamic lr strategy')
     opt = parser.parse_args()
 
     print("Use Deformable Conv ? :",opt.use_deform)

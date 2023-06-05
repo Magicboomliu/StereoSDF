@@ -68,6 +68,7 @@ class DisparityTrainer(object):
         self.criterion = None
         self.epe = Disparity_EPE_Loss
         self.p1_error = P1_metric
+        self.d1_error = D1_metric
         self.model = model
         self.wandb = wandb
         #assert self.wandb is not None
@@ -389,7 +390,8 @@ class DisparityTrainer(object):
         
         batch_time = AverageMeter()
         flow2_EPEs = AverageMeter()
-        P1_errors = AverageMeter()    
+        P1_errors = AverageMeter()
+        D1_errors = AverageMeter()
         losses = AverageMeter()
 
 
@@ -437,12 +439,15 @@ class DisparityTrainer(object):
 
                 flow2_EPE = self.epe(output, target_disp)
                 P1_error = self.p1_error(output, target_disp)
+                D1_error = self.d1_error(output, target_disp)
                 
                 
             if flow2_EPE.data.item() == flow2_EPE.data.item():
                 flow2_EPEs.update(flow2_EPE.data.item(), input_var.size(0))
             if P1_error.data.item() == P1_error.data.item():
                 P1_errors.update(P1_error.data.item(), input_var.size(0))
+            if D1_error.data.item() == D1_error.data.item():
+                D1_errors.update(D1_error.data.item(), input_var.size(0))
 
 
             # measure elapsed time
@@ -456,6 +461,7 @@ class DisparityTrainer(object):
             
         logger.info(' * DISP EPE {:.3f}'.format(flow2_EPEs.avg))
         logger.info(' * P1_error {:.3f}'.format(P1_errors.avg))
+        logger.info(' * D1_error {:.3f}'.format(D1_errors.avg))
         
         
         logger.info(' * avg inference time {:.3f}'.format(inference_time / img_nums))
@@ -463,6 +469,7 @@ class DisparityTrainer(object):
         if self.wandb is not None:
             self.wandb.log({'val_epe': flow2_EPEs.avg})
             self.wandb.log({'val_p1': P1_errors.avg})
+            self.wandb.log({'val_d1': D1_errors.avg})
 
         return flow2_EPEs.avg
         

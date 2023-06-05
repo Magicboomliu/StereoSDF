@@ -102,8 +102,8 @@ class NeuSRenderer(nn.Module):
         weights = alpha * torch.cumprod(torch.cat([torch.ones([batch_size, 1]).to(alpha), 1. - alpha + 1e-7], -1), -1)[:, :-1]  # (512, D-1)
         weights_sum = weights.sum(dim=-1, keepdim=True)  # (512, 1)
 
-        # sampled_color: (512, D, 3)
-        # weights: (512, D)
+        # sampled_color: (512, D-1, 3)
+        # weights: (512, D-1)
         color = (color_batch[:, :-1, :] * weights[:, :, None]).sum(dim=1)  # (512, 3)
 
         return color, weights, weights_sum

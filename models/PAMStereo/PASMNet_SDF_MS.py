@@ -7,6 +7,9 @@ sys.path.append("../..")
 from models.PAMStereo.pam_utils import *
 from models.PAMStereo.modules import *
 from models.UtilsNet.regular_blocks import deconv
+from models.UtilsNet.pyramid_local_cost_volume import build_local_cost_volume_based_on_feature
+from models.PAMStereo.submodules import conv_bn_relu,convt_bn_relu
+
 
 def conv_3x3(in_c, out_c, s=1, d=1):
     return nn.Sequential(
@@ -48,13 +51,16 @@ class ResBlock1x1(nn.Module):
 
 
 class PASMnetSDF(nn.Module):
-    def __init__(self,sdf_type='MLP',max_disp=192):
+    def __init__(self,sdf_type='MLP',max_disp=192,radius=3,
+                 refinement_type='CNN'):
         super(PASMnetSDF, self).__init__()
         ###############################################################
         ## scale     #  1  #  1/2  #  1/4  #  1/8  #  1/16  #  1/32  ##
         ## channels  #  16 #  32   #  64   #  96   #  128   #  160   ##
         ###############################################################
 
+        self.radius = radius
+        self.refinement_type = refinement_type
         
         self.sdf_type = sdf_type
         
@@ -69,8 +75,7 @@ class PASMnetSDF(nn.Module):
         # Output Module
         self.output = Output()
 
-        # Disparity Refinement
-        self.refine = Refinement([64, 96, 128, 160, 160, 128, 96, 64, 32, 16])
+
 
         if self.sdf_type=='2D_conv':
             self.sdf_filter = nn.Sequential(
@@ -85,13 +90,31 @@ class PASMnetSDF(nn.Module):
                 nn.Conv2d(self.max_disp//4,self.max_disp//4,kernel_size=3,stride=1,padding=1)
             )
 
-        
-        self.upconv1 = deconv(64,64)
-        self.iconv1 =  nn.ConvTranspose2d(96, 64, 3, 1, 1)
-        
-
-
-
+        if self.refinement_type!="CNN":
+            self.upconv1 =nn.Sequential(
+                conv_bn_relu(64,64,kernel=3,stride=1,padding=1,bn=True,relu=True),
+                deconv(64,64))                       
+            self.iconv1 =  nn.Sequential(
+                            nn.ConvTranspose2d(96, 64, 3, 1, 1),
+                            nn.ReLU(inplace=True))
+            
+            
+            self.simple_project = nn.Sequential(
+                conv_bn_relu(3,16,3,1,1,True,True),
+                conv_bn_relu(16,16,3,1,1,True,True)
+            )
+            
+            self.upconv0 = nn.Sequential(
+                conv_bn_relu(64,64,kernel=3,stride=1,padding=1,bn=True,relu=True),
+                deconv(64,32)) 
+            self.iconv0 = nn.Sequential(
+                            nn.ConvTranspose2d(32+16, 32, 3, 1, 1),
+                            nn.ReLU(inplace=True))
+            
+            
+        # Disparity Refinement
+        if self.refinement_type =='CNN':
+            self.refine = Refinement([64, 96, 128, 160, 160, 128, 96, 64, 32, 16])
 
     def forward(self, x_left, x_right, max_disp=192):
         # input left and right images
@@ -101,9 +124,7 @@ class PASMnetSDF(nn.Module):
         (fea_left_s1, fea_left_s2, fea_left_s3), fea_refine14_l,fea_refine12_l = self.hourglass(x_left)
         (fea_right_s1, fea_right_s2, fea_right_s3), fea_refine14_r,fea_refine12_r  = self.hourglass(x_right)
         
-        
-
-
+    
         # Cascaded Parallax-Attention Module
         cost_s1, cost_s2, cost_s3 = self.cas_pam([fea_left_s1, fea_left_s2, fea_left_s3],
                                                  [fea_right_s1, fea_right_s2, fea_right_s3])
@@ -142,30 +163,55 @@ class PASMnetSDF(nn.Module):
         
 
         if self.sdf_type in ["2D_conv","MLP"]:
-            
             est_sdf = self.sdf_filter(sampled_cost_volume)
         
-        
-        
-        # change refinemenet here and generate more local cost volume using new features
 
 
         # recover 1/2 left feature
-        upconv1_left = self.upconv1(fea_left_s3)
-        concated1_left = torch.cat((upconv1_left,fea_refine12_l),dim=1)
-        iconv1_left = self.iconv1(concated1_left)        
-        # recover 1/2 right feature
-        upconv1_right = self.upconv1(fea_right_s3)
-        concated1_right = torch.cat((upconv1_right,fea_refine12_r),dim=1)
-        iconv1_right = self.iconv1(concated1_right)
+        if self.refinement_type!="CNN":
+            upconv1_left = self.upconv1(fea_left_s3)
+            concated1_left = torch.cat((upconv1_left,fea_refine12_l),dim=1)
+            iconv1_left = self.iconv1(concated1_left)        
+            # recover 1/2 right feature
+            upconv1_right = self.upconv1(fea_right_s3)
+            concated1_right = torch.cat((upconv1_right,fea_refine12_r),dim=1)
+            iconv1_right = self.iconv1(concated1_right)
 
+            # 1/2 Resolution Local Cost Volume.
+            local_cost_volume12,sampling_candidates12 = build_local_cost_volume_based_on_feature(left_feat=iconv1_left,right_feat=iconv1_right,
+                                                    cur_disp=disp_s3,searching_radius=self.radius)
+            
+            if self.refinement_type=='softmax':
+                local_cost_volume12_prob = F.softmax(local_cost_volume12,dim=1)
+                disp_s12 = torch.sum(local_cost_volume12_prob * sampling_candidates12,dim=1,keepdim=True)
+                disp_s12 = torch.clamp(disp_s12,min=0)
+            
+    
+        if self.refinement_type!="CNN":
+            # recovered the full feature
+            upconv0_left = self.upconv0(iconv1_left)
+            shallow_left = self.simple_project(x_left)
+            concated0_left = torch.cat((upconv0_left,shallow_left),dim=1)
+            iconv0_left = self.iconv0(concated0_left)
+            
+            upconv0_right = self.upconv0(iconv1_right)
+            shallow_right = self.simple_project(x_right)
+            concated0_right = torch.cat((upconv0_right,shallow_right),dim=1)
+            iconv0_right = self.iconv0(concated0_right)
+            
+            # Full Size Local Cost Volume
+            local_cost_volume_full,sampling_candidates_full = build_local_cost_volume_based_on_feature(left_feat=iconv0_left,right_feat=iconv0_right,
+                                                    cur_disp=disp_s12,searching_radius=self.radius)
 
-        # build local refinement module with a radius of 5
+            if self.refinement_type=='softmax':
+                local_cost_volume_full_prob = F.softmax(local_cost_volume_full,dim=1)
+                disp = torch.sum(local_cost_volume_full_prob * sampling_candidates_full,dim=1,keepdim=True)
+                disp = torch.clamp(disp,min=0)
+            
 
-        # Fusion with the PAM Cost volume sampling.
-
-        # Disparity Refinement: A sample layer with initial 1/4 level feature as the guidance.
-        disp = self.refine(fea_refine14_l, disp_s3)
+        # # Disparity Refinement: A sample layer with initial 1/4 level feature as the guidance.
+        if self.refinement_type=='CNN':
+            disp = self.refine(fea_refine14_l, disp_s3)
 
         
         if self.training:
@@ -208,10 +254,6 @@ class Hourglass(nn.Module):
         fea_D3 = self.D3(torch.cat((self.upsample(fea_D2), fea_E1), 1))                # scale: 1/4
 
         return (fea_D1, fea_D2, fea_D3), fea_E1,fea_E0
-
-
-
-
 
 # Cascaded Parallax-Attention Module
 class CascadedPAM(nn.Module):
@@ -286,7 +328,6 @@ class CascadedPAM(nn.Module):
 
         # return 1/16, 1/8, 1/4 level disparity cross attention volume.
         return [cost_s1, cost_s2, cost_s3]
-
 
 class PAM_stage(nn.Module):
     def __init__(self, channels):
@@ -367,28 +408,13 @@ class Refinement(nn.Module):
         return disp * 2 ** 7
 
 
-
-
-
-
-# Upper Scale Refinement
-
-
-
-
-
-
-
-
-
-
 if __name__=="__main__":
     
     left_sample = torch.randn(1,3,320,640).cuda()
     right_sample = torch.randn(1,3,320,640).cuda()
     target_smaple = torch.randn(1,1,320,640).cuda()
     
-    pasmet = PASMnetSDF().cuda()
+    pasmet = PASMnetSDF(refinement_type='softmax').cuda()
     
     disp,attn_list,att_cycle,valid_mask,est_sdf = pasmet(left_sample,right_sample)
     

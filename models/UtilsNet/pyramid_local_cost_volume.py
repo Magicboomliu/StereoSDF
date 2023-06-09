@@ -142,8 +142,6 @@ def build_local_cost_volume_based_on_feature(left_feat,right_feat,cur_disp,searc
     
     return final_volume,sampling_candidates
     
-    
-    
 
 
 def build_local_cost_volume_fixed(cost_volume,cur_disp,searching_radius,sample_nums):

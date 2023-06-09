@@ -38,7 +38,7 @@ def main(opt):
         import wandb
         # init wandb
         group_name = 'model_%s_sdf_%s_cos_lr' % (opt.model, opt.sdf_type)
-        name = 'sdf_weight_%.2f_lr_%f' % (opt.sdf_weight, opt.lr)
+        name = 'sdf_weight_%.2f_lr_%f_optim_%s' % (opt.sdf_weight, opt.lr, opt.optimizer)
         wandb.init(
             project = 'stereo_sdf',
             group = group_name,

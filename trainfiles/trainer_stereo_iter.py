@@ -163,11 +163,20 @@ class DisparityTrainer(object):
                 
     def _build_optimizer(self):
         if self.optimizer == 'Adam':
+            print('load Adam as optimizer')
             beta = 0.999
             momentum = 0.9
+            last_epoch = -1
             self.optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, self.net.parameters()), self.lr,
                                         betas=(momentum, beta), amsgrad=True)
-            self.lr_scheduler = None
+            self.lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(
+                self.optimizer, self.lr,
+                self.num_steps + 10,
+                pct_start=0.05,
+                cycle_momentum=False,
+                anneal_strategy='cos',
+                last_epoch=last_epoch,
+            )
         elif self.optimizer == 'AdamW':
             print('load AdamW as optimizer')
             # this is a hardcode here

@@ -14,6 +14,7 @@ from models.Stereonet.stereonet_sdf import StereoNetSDF
 from models.Stereonet.stereonet_sdf_render import StereoNetSDFRender
 from models.PAMStereo.PASMnet import PASMnet
 from models.PAMStereo.PASMNet_SDF import PASMnetSDF
+from models.PAMStereo.PAMNet_SDF_render import PASMnetSDFRender
 from dataloader.kitti_loader import StereoDataset
 
 from dataloader import kitti_transform
@@ -127,6 +128,8 @@ class DisparityTrainer(object):
             self.net = PASMnet()
         elif self.model =="PAMSDF":
             self.net = PASMnetSDF(sdf_type='MLP',max_disp=192)
+        elif self.model == 'PAMSDFRender':
+            self.net = PASMnetSDFRender(sdf_type='MLP',max_disp=192,use_sdf_render=True)
         else:
             raise NotImplementedError
         
@@ -213,6 +216,7 @@ class DisparityTrainer(object):
         self.net.train()
         end = time.time()
         sdf_loss = None
+        sdf_render_loss = None
 
         # load trainer
         total_steps = 0
@@ -241,6 +245,8 @@ class DisparityTrainer(object):
                     output,attn_list,att_cycle,valid_mask = self.net(left_input,right_input,192)
                 elif self.model =="PAMSDF":
                     output,attn_list,att_cycle,valid_mask,est_sdf= self.net(left_input,right_input,192)
+                elif self.model == 'PAMSDFRender':
+                    output,attn_list,att_cycle,valid_mask,est_sdf,rendered_left,weights_sum= self.net(left_input,right_input,192)
                 
                 if self.model=='StereoNet':
                     # Loss Here
@@ -271,17 +277,29 @@ class DisparityTrainer(object):
                     loss, loss_P, loss_S, loss_PAM = PAMStereoLoss(left_input,right_input,disp=output,att=attn_list,
                                                                 att_cycle=att_cycle,valid_mask=valid_mask,disp_gt=None)
                     photo_loss = loss
-                    
                 elif self.model == "PAMSDF":
                     loss, loss_P, loss_S, loss_PAM = PAMStereoLoss(left_input,right_input,disp=output,att=attn_list,
                                                                 att_cycle=att_cycle,valid_mask=valid_mask,disp_gt=None)
                     sdf_loss = Eki_Loss(est_sdf=est_sdf)
                     photo_loss = loss
-                    # FIXME : beta 
+                    # FIXME : beta
                     # beta = 0.01
                     loss = loss + sdf_loss * self.sdf_weight
                     eki_loss_meter.update(sdf_loss.data.item(),left_input.size(0))
-                    
+                elif self.model == 'PAMSDFRender':
+                    loss, loss_P, loss_S, loss_PAM = PAMStereoLoss(left_input,right_input,disp=output,att=attn_list,
+                                                                att_cycle=att_cycle,valid_mask=valid_mask,disp_gt=None)
+                    sdf_loss = Eki_Loss(est_sdf=est_sdf)
+                    photo_loss = loss
+                    # FIXME : beta
+                    # beta = 0.01
+                    left_14 = F.interpolate(left_input, scale_factor=1/4, mode='bilinear', align_corners=False)
+                    sdf_render_loss = F.l1_loss(left_14, rendered_left, size_average=True, reduction='mean')
+
+                    loss = loss + sdf_loss * self.sdf_weight + sdf_render_loss * 0.1
+
+                    render_loss_meter.update(sdf_render_loss.data.item(), left_input.size(0))
+                    eki_loss_meter.update(sdf_loss.data.item(),left_input.size(0))
                 else:
                     raise NotImplementedError
                 
@@ -306,6 +324,8 @@ class DisparityTrainer(object):
                     self.wandb.log({'photometric_loss': photo_loss.data.cpu().numpy()})
                     if sdf_loss is not None:
                         self.wandb.log({'eikonal_loss': (sdf_loss * self.sdf_weight).data.cpu().numpy()})
+                    if sdf_render_loss is not None:
+                        self.wandb.log({'sdf render loss': (sdf_render_loss * 0.1).data.cpu().numpy()})
                     # self.wandb.log({'learning_rate': cur_lr})
                     self.wandb.log({'lr': self.optimizer.state_dict()['param_groups'][0]['lr']})
 
@@ -360,7 +380,7 @@ class DisparityTrainer(object):
                 if self.model in ["StereoNet","StereoNetSDF","StereoNetSDFRender"]:
                     output = self.net(left_input_pad,right_input_pad)['disp']
 
-                elif self.model in ["PAM","PAMSDF"]:
+                elif self.model in ["PAM","PAMSDF","PAMSDFRender"]:
                     output = self.net(left_input_pad,right_input_pad)
 
                 output = output[:,:,h_pad:,w_pad:]

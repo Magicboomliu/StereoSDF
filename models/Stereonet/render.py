@@ -108,6 +108,23 @@ class NeuSRenderer(nn.Module):
 
         return color, weights, weights_sum
 
+    def batchify(self, sdf_grid, color_grid, chunk=1024*32):
+        color_list = []
+        weights_list = []
+        weights_sum_list = []
+        for i in range(0, sdf_grid.shape[0], chunk):
+            color_batch, weights_batch, weights_sum_batch = self.render_core(sdf_grid[i:i+chunk], color_grid[i:i+chunk])
+            color_list.append(color_batch)
+            weights_list.append(weights_batch)
+            weights_sum_list.append(weights_sum_batch)
+
+        color_list = torch.concat(color_list, dim=0)
+        weights_list = torch.concat(weights_list, dim=0)
+        weights_sum_list = torch.concat(weights_sum_list, dim=0)
+
+        return color_list, weights_list, weights_sum_list
+
+
     def forward(self, sdf_grid, color_grid):
         """
         sdf_grid: (B, D, H, W)
@@ -120,7 +137,8 @@ class NeuSRenderer(nn.Module):
         color_grid = color_grid.permute(0, 3, 4, 2, 1)
         color_grid = color_grid.flatten(start_dim=0, end_dim=2)  # ((B*H*W), D, 3)
 
-        color, weights, weights_sum = self.render_core(sdf_grid, color_grid)
+        # color, weights, weights_sum = self.render_core(sdf_grid, color_grid)
+        color, weights, weights_sum = self.batchify(sdf_grid, color_grid)
         color = color.reshape(B, H, W, 3).permute(0, 3, 1, 2)
         weights_sum = weights_sum.reshape(B, H, W, 1).permute(0, 3, 1, 2)
 
@@ -145,16 +163,16 @@ if __name__ == '__main__':
     D = 10
     H = 3
     W = 4
-    # sdf_grid = torch.randn(B, D, H, W).cuda()
-    # color_grid = torch.randn(B, 3, D, H, W).cuda()
+    sdf_grid = torch.randn(B, D, H, W).cuda()
+    color_grid = torch.randn(B, 3, D, H, W).cuda()
 
-    # renderer = NeuSRenderer().cuda()
+    renderer = NeuSRenderer().cuda()
 
-    # color, weights_sum = renderer(sdf_grid, color_grid)
-    # print(color.shape)
-    # print(weights_sum.shape)
+    color, weights_sum = renderer(sdf_grid, color_grid)
+    print(color.shape)
+    print(weights_sum.shape)
 
-    right_img = torch.randn(B, 3, H, W).cuda()
-    warper = DispWarper(image_size=[H, W], disp_range=torch.arange(0, D, device='cuda', dtype=torch.float))
-    xxx = warper.get_warped_frame(right_img, -1)
-    print(xxx.shape)
+    # right_img = torch.randn(B, 3, H, W).cuda()
+    # warper = DispWarper(image_size=[H, W], disp_range=torch.arange(0, D, device='cuda', dtype=torch.float))
+    # xxx = warper.get_warped_frame(right_img, -1)
+    # print(xxx.shape)

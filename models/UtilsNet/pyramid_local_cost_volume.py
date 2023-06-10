@@ -144,10 +144,20 @@ def build_local_cost_volume_based_on_feature(left_feat,right_feat,cur_disp,searc
     
 
 
-def build_local_cost_volume_fixed(cost_volume,cur_disp,searching_radius,sample_nums):
-    
+def build_local_cost_volume_fixed(cost_volume,cur_disp,searching_radius,sample_nums=None):
+    W_C = cost_volume.shape[-1]
+    W_D = cur_disp.shape[-1]
+    batch = cost_volume.shape[0]
+
+    scale = W_C//W_D
+    if scale!=1:
+        cur_disp = F.interpolate(cur_disp,scale_factor=scale,mode='bilinear',align_corners=False) * scale
+
     # Cost Volume Shape
     B,D,H,W = cost_volume.shape
+    
+    if sample_nums==None:
+        sample_nums = 2* searching_radius
     
     # Get sample candidates
     lower_bound = cur_disp - searching_radius
@@ -174,7 +184,7 @@ def build_local_cost_volume_fixed(cost_volume,cur_disp,searching_radius,sample_n
     
     final_volume = ceil_volume*ceil_rate+ floor_volume*floor_rate
     
-    return final_volume
+    return final_volume,sampling_candidates
 
 
 

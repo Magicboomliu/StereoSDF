@@ -85,6 +85,44 @@ def SDF2Gradient_multiscale(sdf_volume, center_disp, radius, fx_unit=0.58, fy_un
     return sdf_gradient_norm
 
 
+def sample_from_local_points(local_sample_points,sdf_gradient_norm):
+    
+    '''
+    local_sample_points: [B,2*radius+1,H,W]
+    sdf_gradient_norm: [B,D-1,H-1,W-1]
+    '''
+    local_sample_points =local_sample_points[:,:,:-1,:-1] # [B,2*radius+1,H,W]
+    
+    D = sdf_gradient_norm.shape[1]
+    # valid mask
+    sample_candidate_ceil = ste_ceil(local_sample_points)
+    sample_candidate_floor = ste_floor(local_sample_points)
+    sample_candidate_ceil = torch.clamp(sample_candidate_ceil,min=0,max=D-1)
+    sample_candidate_floor = torch.clamp(sample_candidate_floor,min=0,max=D-1)
+    # Linear interplotation
+    floor_rate =(sample_candidate_ceil- local_sample_points)
+    ceil_rate = 1.0 - floor_rate
+    ceil_volume = torch.gather(sdf_gradient_norm,dim=1,index=sample_candidate_ceil.long())
+    floor_volume = torch.gather(sdf_gradient_norm,dim=1,index=sample_candidate_floor.long())
+    final_volume = ceil_volume*ceil_rate+ floor_volume*floor_rate
+    
+    return final_volume
+
+
+
+def ste_ceil(x):
+    return torch.ceil(x) - x.detach() + x
+
+def ste_floor(x):
+    return torch.floor(x) - x.detach() +x
+
+
+
+
+
+
+
+
 if __name__=="__main__":
     sample = torch.rand(2,24,40,80)
     sdf_gradient_norm = SDF2Graident(sample)

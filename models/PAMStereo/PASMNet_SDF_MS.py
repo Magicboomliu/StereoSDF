@@ -8,7 +8,8 @@ from models.PAMStereo.pam_utils import *
 from models.PAMStereo.modules import *
 from models.UtilsNet.regular_blocks import deconv
 from models.UtilsNet.pyramid_local_cost_volume import build_local_cost_volume_based_on_feature
-from models.PAMStereo.submodules import conv_bn_relu,convt_bn_relu
+from models.PAMStereo.submodules import conv_bn_relu,convt_bn_relu,BasicBlock
+from models.UtilsNet.refinement_module import res_disparity_refinement
 
 
 def conv_3x3(in_c, out_c, s=1, d=1):
@@ -75,8 +76,6 @@ class PASMnetSDF(nn.Module):
         # Output Module
         self.output = Output()
 
-
-
         if self.sdf_type=='2D_conv':
             self.sdf_filter = nn.Sequential(
                 ResBlock(self.max_disp//4),
@@ -89,6 +88,8 @@ class PASMnetSDF(nn.Module):
                 ResBlock1x1(self.max_disp//4),
                 nn.Conv2d(self.max_disp//4,self.max_disp//4,kernel_size=3,stride=1,padding=1)
             )
+            
+        
 
         if self.refinement_type!="CNN":
             self.upconv1 =nn.Sequential(
@@ -110,6 +111,27 @@ class PASMnetSDF(nn.Module):
             self.iconv0 = nn.Sequential(
                             nn.ConvTranspose2d(32+16, 32, 3, 1, 1),
                             nn.ReLU(inplace=True))
+            
+            if self.refinement_type=='softmax_cost_aggregation':
+                self.local_cost_volume_aggregation1 = BasicBlock(inplanes=2*self.radius+1,planes=2*self.radius+1)
+                self.local_cost_volume_aggregation0 = BasicBlock(inplanes=2*self.radius+1,planes=2*self.radius+1)
+            
+            if self.refinement_type=='implicit':
+                self.refine1 = res_disparity_refinement(input_layers=64,cost_volume_disp=self.radius*2+1,
+                                                       hidden_dim=32)
+                self.refine0 =  res_disparity_refinement(input_layers=32,cost_volume_disp=self.radius*2+1,
+                                                       hidden_dim=16)
+            
+            self.local_sdf_filter1 = nn.Sequential(
+                ResBlock1x1(self.radius*2+1),
+                ResBlock1x1(self.radius*2+1),
+                nn.Conv2d(self.radius*2+1,self.radius*2+1,kernel_size=3,stride=1,padding=1)
+            )
+            self.local_sdf_filter0 = nn.Sequential(
+                ResBlock1x1(self.radius*2+1),
+                ResBlock1x1(self.radius*2+1),
+                nn.Conv2d(self.radius*2+1,self.radius*2+1,kernel_size=3,stride=1,padding=1)
+            )
             
             
         # Disparity Refinement
@@ -181,10 +203,21 @@ class PASMnetSDF(nn.Module):
             local_cost_volume12,sampling_candidates12 = build_local_cost_volume_based_on_feature(left_feat=iconv1_left,right_feat=iconv1_right,
                                                     cur_disp=disp_s3,searching_radius=self.radius)
             
+            est_local_filter1 = self.local_sdf_filter1(local_cost_volume12)
+            
             if self.refinement_type=='softmax':
                 local_cost_volume12_prob = F.softmax(local_cost_volume12,dim=1)
                 disp_s12 = torch.sum(local_cost_volume12_prob * sampling_candidates12,dim=1,keepdim=True)
                 disp_s12 = torch.clamp(disp_s12,min=0)
+            elif self.refinement_type=="softmax_cost_aggregation":
+                local_cost_volume12 = self.local_cost_volume_aggregation1(local_cost_volume12)
+                local_cost_volume12_prob = F.softmax(local_cost_volume12,dim=1)
+                disp_s12 = torch.sum(local_cost_volume12_prob * sampling_candidates12,dim=1,keepdim=True)
+                disp_s12 = torch.clamp(disp_s12,min=0)
+    
+            
+            elif self.refinement_type=='implicit':
+                disp_s12 = self.refine1(local_cost_volume12,disp_s3,iconv1_left)
             
     
         if self.refinement_type!="CNN":
@@ -202,23 +235,44 @@ class PASMnetSDF(nn.Module):
             # Full Size Local Cost Volume
             local_cost_volume_full,sampling_candidates_full = build_local_cost_volume_based_on_feature(left_feat=iconv0_left,right_feat=iconv0_right,
                                                     cur_disp=disp_s12,searching_radius=self.radius)
+            
+            est_local_filter0 = self.local_sdf_filter0(local_cost_volume_full)
 
             if self.refinement_type=='softmax':
                 local_cost_volume_full_prob = F.softmax(local_cost_volume_full,dim=1)
                 disp = torch.sum(local_cost_volume_full_prob * sampling_candidates_full,dim=1,keepdim=True)
                 disp = torch.clamp(disp,min=0)
+            elif self.refinement_type=="softmax_cost_aggregation":
+                local_cost_volume_full = self.local_cost_volume_aggregation0(local_cost_volume_full)
+                local_cost_volume_full_prob = F.softmax(local_cost_volume_full,dim=1)
+                disp = torch.sum(local_cost_volume_full_prob * sampling_candidates_full,dim=1,keepdim=True)
+                disp = torch.clamp(disp,min=0)
+            elif self.refinement_type=='implicit':
+                disp = self.refine0(local_cost_volume_full,disp_s12,iconv0_left)
             
 
         # # Disparity Refinement: A sample layer with initial 1/4 level feature as the guidance.
         if self.refinement_type=='CNN':
             disp = self.refine(fea_refine14_l, disp_s3)
-
         
         if self.training:
-            return disp, \
-                   [att_s1, att_s2, att_s3], \
-                   [att_cycle_s1, att_cycle_s2, att_cycle_s3], \
-                   [valid_mask_s1, valid_mask_s2, valid_mask_s3],est_sdf
+            if self.refinement_type!='CNN':
+                predicted_disparity_pyramid = []
+                disp_14_upsampled = F.interpolate(disp_s3,scale_factor=4.0,mode='bilinear',align_corners=False) * 4.0
+                disp_12_upsampled = F.interpolate(disp_s12,scale_factor=2.0,mode='bilinear',align_corners=False) *2.0
+                predicted_disparity_pyramid.append(disp_14_upsampled)
+                predicted_disparity_pyramid.append(disp_12_upsampled)
+                predicted_disparity_pyramid.append(disp)
+                
+                return predicted_disparity_pyramid, \
+                    [att_s1, att_s2, att_s3], \
+                    [att_cycle_s1, att_cycle_s2, att_cycle_s3], \
+                    [valid_mask_s1, valid_mask_s2, valid_mask_s3],est_sdf,est_local_filter1,est_local_filter0
+            else:
+                return disp, \
+                    [att_s1, att_s2, att_s3], \
+                    [att_cycle_s1, att_cycle_s2, att_cycle_s3], \
+                    [valid_mask_s1, valid_mask_s2, valid_mask_s3],est_sdf
         else:
             return disp
 
@@ -414,10 +468,17 @@ if __name__=="__main__":
     right_sample = torch.randn(1,3,320,640).cuda()
     target_smaple = torch.randn(1,1,320,640).cuda()
     
-    pasmet = PASMnetSDF(refinement_type='softmax').cuda()
+    pasmet = PASMnetSDF(refinement_type='implicit',sdf_type='MLP').cuda()
     
-    disp,attn_list,att_cycle,valid_mask,est_sdf = pasmet(left_sample,right_sample)
+    disp,attn_list,att_cycle,valid_mask,est_sdf,est_local_sdf1,est_local_sdf0 = pasmet(left_sample,right_sample)
     
+    
+    # print(disp.shape)
+    for d in disp:
+        print(d.shape)
+        
+    print(est_local_sdf0.shape)
+    print(est_local_sdf1.shape)
 
     
 

@@ -321,7 +321,7 @@ class DisparityTrainer(object):
                 
                 # update training logs
                 if self.wandb is not None and total_steps % self.summary_freq == 0:
-                    logger.info('photometric loss is %.3f' % (photo_loss.data.cpu().numpy()))
+                    logger.info('total step is %d, photometric loss is %.3f' % (total_steps, photo_loss.data.cpu().numpy()))
                     self.wandb.log({'photometric_loss': photo_loss.data.cpu().numpy()})
                     if sdf_loss is not None:
                         self.wandb.log({'eikonal_loss': (sdf_loss * self.sdf_weight).data.cpu().numpy()})

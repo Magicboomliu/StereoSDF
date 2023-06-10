@@ -5,6 +5,7 @@ import numpy as np
 from torchvision import transforms
 from torch.utils.data import DataLoader
 from dataloader.preprocess import scale_disp
+import matplotlib.pyplot as plt
 
 from utils.AverageMeter import AverageMeter
 from utils.common import logger, check_path, write_pfm,count_parameters
@@ -328,6 +329,15 @@ class DisparityTrainer(object):
                         self.wandb.log({'sdf render loss': (sdf_render_loss * 0.1).data.cpu().numpy()})
                     # self.wandb.log({'learning_rate': cur_lr})
                     self.wandb.log({'lr': self.optimizer.state_dict()['param_groups'][0]['lr']})
+
+                if self.wandb is not None and total_steps % 100 * self.summary_freq == 0 and self.model == 'PAMSDFRender':
+                    fig, ax = plt.subplots()
+                    ax.plot(left_14[0].permute(1, 2, 0).detach().cpu().numpy())
+                    self.wandb.log({'original_14': fig})
+
+                    fig, ax = plt.subplots()
+                    ax.plot(rendered_left[0].permute(1, 2, 0).detach().cpu().numpy())
+                    self.wandb.log({'rendered_14': fig})
 
                 # launch evaluation
                 if total_steps % self.val_freq == 0:

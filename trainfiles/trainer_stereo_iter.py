@@ -297,8 +297,7 @@ class DisparityTrainer(object):
                     left_14 = F.interpolate(left_input, scale_factor=1/4, mode='bilinear', align_corners=False)
                     # sdf_render_loss = F.l1_loss(left_14, rendered_left, size_average=True, reduction='mean')
                     sdf_render_loss = loss_ssim_l1(left_14, rendered_left, valid_mask[-1][0])
-                    print(valid_mask[0][-1].shape)
-                    exit()
+                    # print(valid_mask[-1][0].shape)
 
                     loss = loss + sdf_loss * self.sdf_weight + sdf_render_loss * 0.1
 

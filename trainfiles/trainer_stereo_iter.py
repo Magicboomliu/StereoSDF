@@ -342,7 +342,7 @@ class DisparityTrainer(object):
                     self.wandb.log({'rendered_14': self.wandb.Image(fig)})
 
                     fig, ax = plt.subplots() 
-                    ax.imshow(valid_mask[-1][0].permute(1, 2, 0).detach().cpu().numpy(), cmap='gray')
+                    ax.imshow(valid_mask[-1][0][0].permute(1, 2, 0).detach().cpu().numpy(), cmap='gray')
                     self.wandb.log({'valid_mask': self.wandb.Image(fig)})
 
                 # launch evaluation

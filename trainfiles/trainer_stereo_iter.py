@@ -297,6 +297,8 @@ class DisparityTrainer(object):
                     left_14 = F.interpolate(left_input, scale_factor=1/4, mode='bilinear', align_corners=False)
                     # sdf_render_loss = F.l1_loss(left_14, rendered_left, size_average=True, reduction='mean')
                     sdf_render_loss = loss_ssim_l1(left_14, rendered_left, valid_mask[-1][0])
+                    print(valid_mask[0][-1].shape)
+                    exit()
 
                     loss = loss + sdf_loss * self.sdf_weight + sdf_render_loss * 0.1
 
@@ -341,7 +343,7 @@ class DisparityTrainer(object):
                     self.wandb.log({'rendered_14': self.wandb.Image(fig)})
 
                     fig, ax = plt.subplots()
-                    ax.imshow(valid_mask[0][-1].permute(1, 2, 0)[-1].detach().cpu().numpy(), cmap='gray')
+                    ax.imshow(valid_mask[0][-1].permute(1, 2, 0)[..., -1].detach().cpu().numpy(), cmap='gray')
                     self.wandb.log({'valid_mask': self.wandb.Image(fig)})
 
                 # launch evaluation

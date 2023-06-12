@@ -25,6 +25,22 @@ def loss_disp_unsupervised(img_left, img_right, disp, valid_mask=None, mask=None
     return loss
 
 
+def loss_ssim_l1(img, rendered_img, valid_mask=None):
+    abs_diff = torch.abs(img - rendered_img)
+    l1_loss = abs_diff.mean(1, True)
+
+    ssim_loss = (1 - ssim(img, rendered_img)) / 2
+    ssim_loss = ssim_loss.mean(1, True)
+
+    loss = l1_loss * 0.15 + ssim_loss * 0.85
+    if valid_mask is not None:
+        loss = (loss * valid_mask).sum() / (valid_mask.sum() + 1e-7)
+    else:
+        loss = loss.mean()
+
+    return loss
+
+
 def loss_disp_smoothness(disp, img):
     img_grad_x = img[:, :, :, :-1] - img[:, :, :, 1:]
     img_grad_y = img[:, :, :-1, :] - img[:, :, 1:, :]

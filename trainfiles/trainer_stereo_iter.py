@@ -29,7 +29,7 @@ import os
 from torch.autograd import Variable
 
 from losses.unsupervised_loss import loss_disp_unsupervised,MultiScaleLoss,Eki_Loss
-from losses.pam_loss import PAMStereoLoss
+from losses.pam_loss import PAMStereoLoss, loss_ssim_l1
 
 
 # IMAGENET NORMALIZATION
@@ -295,7 +295,8 @@ class DisparityTrainer(object):
                     # FIXME : beta
                     # beta = 0.01
                     left_14 = F.interpolate(left_input, scale_factor=1/4, mode='bilinear', align_corners=False)
-                    sdf_render_loss = F.l1_loss(left_14, rendered_left, size_average=True, reduction='mean')
+                    # sdf_render_loss = F.l1_loss(left_14, rendered_left, size_average=True, reduction='mean')
+                    sdf_render_loss = loss_ssim_l1(left_14, rendered_left, valid_mask[-1][0])
 
                     loss = loss + sdf_loss * self.sdf_weight + sdf_render_loss * 0.1
 
@@ -338,6 +339,10 @@ class DisparityTrainer(object):
                     fig, ax = plt.subplots()
                     ax.imshow(rendered_left[0].permute(1, 2, 0).detach().cpu().numpy())
                     self.wandb.log({'rendered_14': self.wandb.Image(fig)})
+
+                    fig, ax = plt.subplots()
+                    ax.imshow(valid_mask[0][-1].permute(1, 2, 0)[-1].detach().cpu().numpy(), cmap='gray')
+                    self.wandb.log({'valid_mask': self.wandb.Image(fig)})
 
                 # launch evaluation
                 if total_steps % self.val_freq == 0:

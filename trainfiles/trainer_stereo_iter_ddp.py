@@ -42,7 +42,7 @@ class DisparityTrainer(object):
     def __init__(self, lr, devices, dataset, trainlist, vallist, datapath, 
                  batch_size, maxdisp,use_deform=False, pretrain=None, 
                         model='StereoNet', test_batch=4,initial_pretrain=None,
-                        wandb=None,local_rank=0,
+                        wandb=None,
                         **kwargs):
         super(DisparityTrainer, self).__init__()
         
@@ -53,8 +53,7 @@ class DisparityTrainer(object):
         self.devices = [int(item) for item in devices.split(',')]
         ngpu = len(devices)
         self.ngpu = ngpu
-        
-        self.local_rank = local_rank
+    
 
         self.summary_freq = kwargs['opt'].summary_freq
         self.sdf_weight = kwargs['opt'].sdf_weight
@@ -64,6 +63,7 @@ class DisparityTrainer(object):
         self.weight_decay = kwargs['opt'].weight_decay
         self.val_freq = kwargs['opt'].val_freq
         self.datathread = kwargs['opt'].datathread
+        self.local_rank = kwargs['opt'].local_rank
     
         self.trainlist = trainlist
         self.vallist = vallist
@@ -154,31 +154,36 @@ class DisparityTrainer(object):
             print('Number of model parameters: {}'.format(sum([p.data.nelement() for p in self.net.parameters()])))
 
         if self.pretrain == 'none':
-            logger.info('Initial a new model...')
-            if self.initial_pretrain !='none':
-                pretrain_ckpt = self.initial_pretrain
-                print("Loading the Model with Some initial Weights........")
-                ckpt = torch.load(pretrain_ckpt)
-                current_model_dict = self.net.state_dict()
-                useful_dict ={k:v for k,v in ckpt['state_dict'].items() if k in current_model_dict.keys()}
-                print("{}/{} has been re-used in this training".format(len(useful_dict) ,len(ckpt['state_dict'])))
-                current_model_dict.update(useful_dict)
-                self.net.load_state_dict(current_model_dict)
+            if self.local_rank==0:
+                logger.info('Initial a new model...')
+                if self.initial_pretrain !='none':
+                    pretrain_ckpt = self.initial_pretrain
+                    print("Loading the Model with Some initial Weights........")
+                    ckpt = torch.load(pretrain_ckpt)
+                    current_model_dict = self.net.state_dict()
+                    useful_dict ={k:v for k,v in ckpt['state_dict'].items() if k in current_model_dict.keys()}
+                    print("{}/{} has been re-used in this training".format(len(useful_dict) ,len(ckpt['state_dict'])))
+                    current_model_dict.update(useful_dict)
+                    self.net.load_state_dict(current_model_dict)
         else:
             if os.path.isfile(self.pretrain):
                 model_data = torch.load(self.pretrain)
-                logger.info('Load pretrain model: %s', self.pretrain)
+                if self.local_rank==0:
+                    logger.info('Load pretrain model: %s', self.pretrain)
                 if 'state_dict' in model_data.keys():
                     self.net.load_state_dict(model_data['state_dict'])
                 else:
                     self.net.load_state_dict(model_data)
                 self.is_pretrain = True
             else:
-                logger.warning('Can not find the specific model %s, initial a new model...', self.pretrain)
+                if self.local_rank==0:
+                    
+                    logger.warning('Can not find the specific model %s, initial a new model...', self.pretrain)
                 
     def _build_optimizer(self):
         if self.optimizer == 'Adam':
-            print('load Adam as optimizer')
+            if self.local_rank==0:
+                print('load Adam as optimizer')
             beta = 0.999
             momentum = 0.9
             last_epoch = -1
@@ -193,7 +198,6 @@ class DisparityTrainer(object):
                 last_epoch=last_epoch,
             )
         elif self.optimizer == 'AdamW':
-            print('load AdamW as optimizer')
             # this is a hardcode here
             last_epoch = -1
             self.optimizer = torch.optim.AdamW(filter(lambda p: p.requires_grad, self.net.parameters()), lr=self.lr,
@@ -221,7 +225,7 @@ class DisparityTrainer(object):
         self._build_net()
         self._build_optimizer()
 
-    def launch_training(self,local_rank):
+    def launch_training(self):
         
         # Data Summary
         batch_time = AverageMeter()
@@ -231,7 +235,8 @@ class DisparityTrainer(object):
         render_loss_meter = AverageMeter()
 
         # non-detection
-        torch.autograd.set_detect_anomaly(True)
+        if self.local_rank==0:
+            torch.autograd.set_detect_anomaly(True)
         
         # switch to train mode
         self.net.train()
@@ -242,8 +247,8 @@ class DisparityTrainer(object):
         total_steps = 0
         while total_steps < self.num_steps:
             for i_batch, sample_batched in enumerate(self.train_loader):
-                left_input = torch.autograd.Variable(sample_batched['img_left'].cuda(local_rank), requires_grad=False)
-                right_input = torch.autograd.Variable(sample_batched['img_right'].cuda(local_rank), requires_grad=False)
+                left_input = torch.autograd.Variable(sample_batched['img_left'].cuda(self.local_rank), requires_grad=False)
+                right_input = torch.autograd.Variable(sample_batched['img_right'].cuda(self.local_rank), requires_grad=False)
                 
                 data_time.update(time.time() - end)
                 self.optimizer.zero_grad()
@@ -357,7 +362,7 @@ class DisparityTrainer(object):
 
                 # launch evaluation
                 if total_steps % self.val_freq == 0:
-                    val_EPE = self.validate(local_rank=local_rank)
+                    val_EPE = self.validate()
                     torch.save({
                         'step': total_steps,
                         'state_dict': self.get_model(),
@@ -380,8 +385,8 @@ class DisparityTrainer(object):
         inference_time = 0
         img_nums = 0
         for i, sample_batched in enumerate(self.test_loader):
-            left_input = torch.autograd.Variable(sample_batched['img_left'].cuda(local_rank), requires_grad=False)
-            right_input = torch.autograd.Variable(sample_batched['img_right'].cuda(local_rank), requires_grad=False)
+            left_input = torch.autograd.Variable(sample_batched['img_left'].cuda(self.local_rank), requires_grad=False)
+            right_input = torch.autograd.Variable(sample_batched['img_right'].cuda(self.local_rank), requires_grad=False)
             input = torch.cat((left_input, right_input), 1)
             input_var = torch.autograd.Variable(input, requires_grad=False)
             target_disp = sample_batched['gt_disp'].unsqueeze(1)

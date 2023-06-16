@@ -59,7 +59,6 @@ def main(opt):
                                opt.dataset, opt.trainlist, opt.vallist, 
                                opt.datapath, opt.batch_size, opt.maxdisp,opt.use_deform,opt.pretrain,opt.model, 
                                test_batch=opt.test_batch,initial_pretrain=opt.initial_pretrain, wandb=wandb,
-                               local_rank=opt.local_rank,
                                opt=opt)
     
     # validate the pretrained model on test data
@@ -69,7 +68,7 @@ def main(opt):
     start_epoch = opt.startEpoch
     
     # load training process
-    trainer.launch_training(opt.local_rank)
+    trainer.launch_training()
     wandb.finish()
     
 

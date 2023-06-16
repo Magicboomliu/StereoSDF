@@ -52,10 +52,10 @@ class ResBlock1x1(nn.Module):
         x = self.conv(input)
         return x + input
 
-class PASMnetSDF(nn.Module):
+class PASMnetSDFMultiSclae(nn.Module):
     def __init__(self,sdf_type='MLP',max_disp=192,radius=3,
                  refinement_type='CNN'):
-        super(PASMnetSDF, self).__init__()
+        super(PASMnetSDFMultiSclae, self).__init__()
         ###############################################################
         ## scale     #  1  #  1/2  #  1/4  #  1/8  #  1/16  #  1/32  ##
         ## channels  #  16 #  32   #  64   #  96   #  128   #  160   ##
@@ -482,7 +482,7 @@ if __name__=="__main__":
     right_sample = torch.randn(1,3,320,640).cuda()
     target_smaple = torch.randn(1,1,320,640).cuda()
     
-    pasmet = PASMnetSDF(refinement_type='softmax',sdf_type='MLP').cuda()
+    pasmet = PASMnetSDFMultiSclae(refinement_type='softmax',sdf_type='MLP').cuda()
     
     disp,attn_list,att_cycle,valid_mask,[est_sdf,est_sdf1,est_sdf0],[local_sample12,local_sample_full] = pasmet(left_sample,right_sample)
     

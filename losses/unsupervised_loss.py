@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from math import exp
 from losses.metirc import *
 
-from losses.sdfvolume2gradient import SDF2Graident
+from losses.sdfvolume2gradient import SDF2Graident,sample_from_local_points
 
 def Eki_Loss(est_sdf):
     
@@ -12,6 +12,14 @@ def Eki_Loss(est_sdf):
     eki_loss = ((sdf_gradient_norm - torch.ones_like(sdf_gradient_norm))**2).mean()
     
     return eki_loss
+
+def Eki_Loss_Local(est_sdf,local_sample_points):
+    sdf_gradient_norm = SDF2Graident(est_sdf)
+    sdf_local_norm = sample_from_local_points(local_sample_points,sdf_gradient_norm)
+    
+    eki_loss_local = ((sdf_local_norm- torch.ones_like(sdf_local_norm))**2).mean()
+    return eki_loss_local
+
 
 def L1Loss(input, target):
     return (input - target).abs().mean()

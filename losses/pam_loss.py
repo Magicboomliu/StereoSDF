@@ -172,6 +172,44 @@ def ssim(img1, img2, window_size=11):
 
 
 
+def PAMStereoLossMultiScale(img_left,img_right,disp_pyramid,att,att_cycle,valid_mask,disp_gt):
+    disp = disp_pyramid[-1]
+    if disp_gt is not None:
+        mask_left = ((disp_gt > 0) & (disp_gt < 192)).float()
+    else:
+        mask_left = torch.ones_like(disp)
+    mask_right = torch.ones_like(mask_left)
+    
+    weights = [0.8,1.0,1.2]
+    
+    total_loss_P = 0
+    
+    total_loss_S = 0
+    
+    for idx, d in enumerate(disp_pyramid):
+        # loss-p
+        loss_P = loss_disp_unsupervised(img_left, img_right, disp, F.interpolate(valid_mask[-1][0], scale_factor=4, mode='nearest'), mask_left)
+    
+        # loss-S
+        loss_S = loss_disp_smoothness(disp, img_left)
+
+        total_loss_P = total_loss_P + loss_P * weights[idx]
+        
+        total_loss_S = total_loss_S + loss_S * weights[idx]
+
+    # loss-PAM
+    loss_PAM_P = loss_pam_photometric(img_left, img_right, att, valid_mask, [mask_left, mask_right])
+    loss_PAM_C = loss_pam_cycle(att_cycle, valid_mask)
+    loss_PAM_S = loss_pam_smoothness(att)
+    loss_PAM = loss_PAM_P + loss_PAM_S + loss_PAM_C
+
+    loss = total_loss_P + 0.1 * total_loss_S + loss_PAM
+    
+    return loss, total_loss_P, total_loss_S, loss_PAM
+
+
+
+
 
 def PAMStereoLoss(img_left,img_right,disp,att,att_cycle,valid_mask,disp_gt):
     

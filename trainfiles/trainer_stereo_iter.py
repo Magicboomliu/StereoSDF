@@ -14,6 +14,7 @@ from models.Stereonet.stereonet_sdf import StereoNetSDF
 from models.Stereonet.stereonet_sdf_render import StereoNetSDFRender
 from models.PAMStereo.PASMnet import PASMnet
 from models.PAMStereo.PASMNet_SDF import PASMnetSDF
+from models.PAMStereo.PASMNet_SDF_MS2 import PASMnetSDFMultiSclae
 from dataloader.kitti_loader import StereoDataset
 
 from dataloader import kitti_transform
@@ -26,8 +27,8 @@ import time
 import os
 from torch.autograd import Variable
 
-from losses.unsupervised_loss import loss_disp_unsupervised,MultiScaleLoss,Eki_Loss
-from losses.pam_loss import PAMStereoLoss
+from losses.unsupervised_loss import loss_disp_unsupervised,MultiScaleLoss,Eki_Loss,Eki_Loss_Local
+from losses.pam_loss import PAMStereoLoss,PAMStereoLossMultiScale
 
 
 # IMAGENET NORMALIZATION
@@ -127,6 +128,8 @@ class DisparityTrainer(object):
             self.net = PASMnet()
         elif self.model =="PAMSDF":
             self.net = PASMnetSDF(sdf_type='MLP',max_disp=192)
+        elif self.model=='PAMSDF_MultiScale':
+            self.net = PASMnetSDFMultiSclae(sdf_type='MLP',max_disp=192,radius=5,refinement_type='softmax_cost_aggregation')
         else:
             raise NotImplementedError
         
@@ -241,6 +244,10 @@ class DisparityTrainer(object):
                     output,attn_list,att_cycle,valid_mask = self.net(left_input,right_input,192)
                 elif self.model =="PAMSDF":
                     output,attn_list,att_cycle,valid_mask,est_sdf= self.net(left_input,right_input,192)
+                elif self.model == 'PAMSDF_MultiScale':
+                    output_pyramid,attn_list,att_cycle,valid_mask,est_list,sample_locals = self.net(left_input,right_input,192)
+                    output = output_pyramid[-1]
+
                 
                 if self.model=='StereoNet':
                     # Loss Here
@@ -281,6 +288,22 @@ class DisparityTrainer(object):
                     # beta = 0.01
                     loss = loss + sdf_loss * self.sdf_weight
                     eki_loss_meter.update(sdf_loss.data.item(),left_input.size(0))
+                
+                elif self.model=="PAMSDF_MultiScale":
+                    loss, loss_P, loss_S, loss_PAM = PAMStereoLossMultiScale(left_input,right_input,
+                                                                             disp_pyramid=output_pyramid,att=attn_list,
+                                                                att_cycle=att_cycle,valid_mask=valid_mask,disp_gt=None)
+                    sdf_loss_14 = Eki_Loss(est_sdf=est_list[0])
+                    sdf_loss_12_local = Eki_Loss_Local(est_sdf=est_list[1],local_sample_points=sample_locals[0])
+                    sdf_loss_l1_local = Eki_Loss_Local(est_sdf=est_list[2],local_sample_points=sample_locals[1])
+                    
+                    sdf_loss = sdf_loss_14 + sdf_loss_12_local + sdf_loss_l1_local
+                    photo_loss = loss
+                    # FIXME : beta 
+                    # beta = 0.01
+                    loss = loss + sdf_loss * self.sdf_weight
+                    eki_loss_meter.update(sdf_loss.data.item(),left_input.size(0))
+                    
                     
                 else:
                     raise NotImplementedError
@@ -360,7 +383,7 @@ class DisparityTrainer(object):
                 if self.model in ["StereoNet","StereoNetSDF","StereoNetSDFRender"]:
                     output = self.net(left_input_pad,right_input_pad)['disp']
 
-                elif self.model in ["PAM","PAMSDF"]:
+                elif self.model in ["PAM","PAMSDF","PAMSDF_MultiScale"]:
                     output = self.net(left_input_pad,right_input_pad)
 
                 output = output[:,:,h_pad:,w_pad:]

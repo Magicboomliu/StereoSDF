@@ -95,10 +95,11 @@ def disp_warp(right, disparity):
                                  [1, 1, H, W],
                                  align_corners=True)
     base_coord = normal_coord.to(device)  # (1, height, width, 2), range from -1 to 1
+    base_coord = base_coord.repeat(B, 1, 1, 1)
 
     zeros = torch.zeros_like(base_coord)
     disp_map = zeros.clone()
-    disp_map[..., 0] = disp_map[..., 0:1] - disparity  # 左图采样右图去重构左图
+    disp_map[..., 0:1] = disp_map[..., 0:1] - disparity.permute(0, 2, 3, 1)  # 左图采样右图去重构左图
     normal_disp_map = get_normalize_coord(disp_map, [H, W])
     normal_disp_map = normal_disp_map.to(device=device)
 
@@ -235,12 +236,11 @@ if __name__ == '__main__':
 
     renderer = NeuSRenderer().cuda()
 
-    color, weights_sum, depth = renderer(sdf_grid, color_grid, right)
+    color, weights_sum, depth, warped = renderer(sdf_grid, color_grid, right)
     print(color.shape)
     print(weights_sum.shape)
     print(depth.shape)
-
-    disp_warp(right, None)
+    print(warped.shape)
 
     # right_img = torch.randn(B, 3, H, W).cuda()
     # warper = DispWarper(image_size=[H, W], disp_range=torch.arange(0, D, device='cuda', dtype=torch.float))

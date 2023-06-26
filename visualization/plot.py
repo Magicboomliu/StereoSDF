@@ -30,7 +30,7 @@ def plot(output, est_sdf, H, W, fx_unit=0.58, fy_unit=1.92, baseline=0.54, exp='
     fx = fx_unit * width
     
     # 当前像素点， 1/4， sdf
-    pt_sdf = est_sdf[:,H//4,W//4].cpu().detach().numpy()[::-1]
+    pt_sdf = est_sdf[:,H//4,W//4].cpu().detach().numpy()
 
     # 当前像素点深度
     pt_depth = visualize_depth(output.cpu().detach().numpy(), exp=exp)[H,W]

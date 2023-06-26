@@ -66,7 +66,7 @@ def main(opt):
                                test_batch=opt.test_batch,initial_pretrain=opt.initial_pretrain, wandb=wandb,opt=opt)
     
     # sample_batched = next(iter(tester1.train_loader))
-    sample_batched = torch.load('visualization/test_data/sample_batched_3.pt')
+    sample_batched = torch.load('visualization/test_data/sample_batched.pt')
     left_input = torch.autograd.Variable(sample_batched['img_left'], requires_grad=False)
     right_input = torch.autograd.Variable(sample_batched['img_right'], requires_grad=False)
     # torch.save(sample_batched, "sample_batched_9.pt")

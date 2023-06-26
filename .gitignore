@@ -5,4 +5,4 @@ experiments_logdir
 wandb/*
 logs/*
 visualization/output/*
-visualization/test_data/*
+# visualization/test_data/*

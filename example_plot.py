@@ -105,7 +105,7 @@ def main():
     
     ## 加载数据
     # sample_batched = next(iter(tester1.train_loader))
-    sample_batched = torch.load('visualization/test_data/sample_batched_3.pt')
+    sample_batched = torch.load('visualization/test_data/sample_batched.pt')
     left_input = torch.autograd.Variable(sample_batched['img_left'], requires_grad=False)
     right_input = torch.autograd.Variable(sample_batched['img_right'], requires_grad=False)
 

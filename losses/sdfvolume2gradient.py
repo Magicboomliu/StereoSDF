@@ -3,6 +3,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+KITTI_RAW_WIDTH = 1242
+KITTI_RAW_HEIGHT = 375
+CROP_WIDTH = 960
+CROP_HEIGHT = 320
+
+
 def SDF2Graident(sdf_volume, fx_unit=0.58, fy_unit=1.92, baseline=0.54):
     '''
     SDF_volume: (B, D, H, W)
@@ -20,8 +26,8 @@ def SDF2Graident(sdf_volume, fx_unit=0.58, fy_unit=1.92, baseline=0.54):
 
     # hypo_depths = hypo_depths[None, :, None, None]  # (1, D, 1, 1)
     # coords_3d = coords_3d[:, None, ...] * hypo_depths  # (3, D, H, W)
-    fx = fx_unit * width
-    fy = fy_unit * height
+    fx = fx_unit * width * (KITTI_RAW_WIDTH / CROP_WIDTH)
+    fy = fy_unit * height * (KITTI_RAW_HEIGHT / CROP_HEIGHT)
     hypo_depths = torch.linspace(0, depth_num-1, depth_num).type_as(sdf_volume)
     hypo_depths[0] += 1e-4  # precision issue
     hypo_depths = fx * baseline / hypo_depths  # convert disparity to depth
@@ -60,8 +66,8 @@ def SDF2Gradient_multiscale(sdf_volume, center_disp, radius, fx_unit=0.58, fy_un
 
     # hypo_depths = hypo_depths[None, :, None, None]  # (1, D, 1, 1)
     # coords_3d = coords_3d[:, None, ...] * hypo_depths  # (3, D, H, W)
-    fx = fx_unit * width
-    fy = fy_unit * height
+    fx = fx_unit * width * (KITTI_RAW_WIDTH / CROP_WIDTH)
+    fy = fy_unit * height * (KITTI_RAW_HEIGHT / CROP_HEIGHT)
     # hypo_depths = torch.linspace(0, depth_num-1, depth_num).type_as(sdf_volume)
     # 多尺度时，根据center_disp和radius决定hypo_depths
     hypo_depths = torch.linspace(center_disp-radius, center_disp+radius, 2*radius+1).type_as(sdf_volume)

@@ -370,7 +370,7 @@ class DisparityTrainer(object):
                         'step': total_steps,
                         'state_dict': self.get_model(),
                         'val_epe': val_EPE,
-                    }, 'step_%d_%.3f.pth' % (total_steps, val_EPE))
+                    }, 'models_saved/step_%d_%.3f.pth' % (total_steps, val_EPE))
                     self.net.train()
         
         return None

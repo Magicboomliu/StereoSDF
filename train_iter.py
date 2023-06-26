@@ -37,7 +37,7 @@ def main(opt):
     if use_wandb==True:
         import wandb
         # init wandb
-        group_name = 'j_sdf_render_model_%s_sdf_%s_cos_lr' % (opt.model, opt.sdf_type)
+        group_name = 'jiang_sdf_render_model_%s_sdf_%s_cos_lr' % (opt.model, opt.sdf_type)
         name = 'render_weight_01_sdf_weight_%.2f_lr_%f_optim_%s' % (opt.sdf_weight, opt.lr, opt.optimizer)
         wandb.init(
             project = 'stereo_sdf',

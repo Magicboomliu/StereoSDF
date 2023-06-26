@@ -337,9 +337,9 @@ class DisparityTrainer(object):
                 if self.wandb is not None and total_steps % 100 * self.summary_freq == 0 and self.model == 'PAMSDFRender':
                     fig, ax = plt.subplots(nrows=3, ncols=2)
 
-                    vis = left_14[0].permute(1, 2, 0).detach().cpu().numpy()
-                    h, w, _ = vis.shape
-                    ax[0, 0].imshow(cv2.resize(vis, (2*w, 2*h)))
+                    left_14_vis = left_14[0].permute(1, 2, 0).detach().cpu().numpy()
+                    h, w, _ = left_14_vis.shape
+                    ax[0, 0].imshow(cv2.resize(left_14_vis, (2*w, 2*h)))
                     rendered_left_vis = rendered_left[0].permute(1, 2, 0).detach().cpu().numpy()
                     ax[1, 0].imshow(cv2.resize(rendered_left_vis, (2*w, 2*h)))
 

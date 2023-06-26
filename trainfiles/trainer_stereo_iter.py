@@ -62,6 +62,7 @@ class DisparityTrainer(object):
         self.weight_decay = kwargs['opt'].weight_decay
         self.val_freq = kwargs['opt'].val_freq
         self.datathread = kwargs['opt'].datathread
+        self.outf = kwargs['opt'].outf
     
         self.trainlist = trainlist
         self.vallist = vallist
@@ -370,7 +371,7 @@ class DisparityTrainer(object):
                         'step': total_steps,
                         'state_dict': self.get_model(),
                         'val_epe': val_EPE,
-                    }, 'models_saved/step_%d_%.3f.pth' % (total_steps, val_EPE))
+                    }, '%s/step_%d_%.3f.pth' % (self.outf, total_steps, val_EPE))
                     self.net.train()
         
         return None

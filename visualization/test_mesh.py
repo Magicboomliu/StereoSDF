@@ -55,16 +55,6 @@ def save_checkpoint(state, is_best, filename='checkpoint.pth'):
 
 '''  Main Function to train the model'''
 def main(opt):
-
-    # load the training loss scheme
-    loss_json = load_loss_scheme(opt.loss)
-    train_round = loss_json["round"]
-    loss_scale = loss_json["loss_scale"]
-    loss_weights = loss_json["loss_weights"]
-    epoches = loss_json["epoches"]
-    logger.info(loss_weights)
-    
-    
     # initialize a trainer
     tester1 = DisparityTrainer(opt.lr, opt.devices, 
                                opt.dataset, opt.trainlist, opt.vallist, 
@@ -76,9 +66,9 @@ def main(opt):
                                test_batch=opt.test_batch,initial_pretrain=opt.initial_pretrain, wandb=wandb,opt=opt)
     
     # sample_batched = next(iter(tester1.train_loader))
-    sample_batched = torch.load('test_data/sample_batched_3.pt')
-    left_input = torch.autograd.Variable(sample_batched['img_left'].cuda(), requires_grad=False)
-    right_input = torch.autograd.Variable(sample_batched['img_right'].cuda(), requires_grad=False)
+    sample_batched = torch.load('visualization/test_data/sample_batched_3.pt')
+    left_input = torch.autograd.Variable(sample_batched['img_left'], requires_grad=False)
+    right_input = torch.autograd.Variable(sample_batched['img_right'], requires_grad=False)
     # torch.save(sample_batched, "sample_batched_9.pt")
     # img = left_input[0]
     # to_image = transforms.ToPILImage()
@@ -86,10 +76,10 @@ def main(opt):
     # img.save('test_ori_9.jpg')
     if tester1.model =="PAMSDF":
         output,attn_list,att_cycle,valid_mask,est_sdf= tester1.net(left_input,right_input,192)
-        visualize_mesh(output, est_sdf, 'PAMSDF')
+        visualize_mesh(est_sdf[0], 'PAMSDF')
     if tester2.model == 'PAMSDFRender':
         output,attn_list,att_cycle,valid_mask,est_sdf,rendered_left,weights_sum= tester2.net(left_input,right_input,192)
-        visualize_mesh(output, est_sdf, 'PAMSDFRender')
+        visualize_mesh(est_sdf[0], 'PAMSDFRender')
 
     
     
@@ -139,24 +129,4 @@ if __name__ == '__main__':
     parser.add_argument('--datathread', type=int, default=4, help='numworkers for dataloader')
     opt = parser.parse_args()
 
-    print("Use Deformable Conv ? :",opt.use_deform)
-    try:
-        os.makedirs(opt.outf)
-    except OSError:
-        pass
-    hdlr = logging.FileHandler(opt.logFile)
-    hdlr.setFormatter(formatter)
-    logger.addHandler(hdlr) 
-    logger.info('Configurations: %s', opt)
-    
-    if opt.manualSeed is None:
-        opt.manualSeed = random.randint(1, 10000)
-    logger.info("Random Seed: %s", opt.manualSeed)
-    random.seed(opt.manualSeed)
-    torch.manual_seed(opt.manualSeed)
-    if opt.cuda:
-        torch.cuda.manual_seed_all(opt.manualSeed)
-
-    if torch.cuda.is_available() and not opt.cuda:
-        logger.warning("WARNING: You should run with --cuda since you have a CUDA device.")
     main(opt)

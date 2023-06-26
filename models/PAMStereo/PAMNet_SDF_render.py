@@ -135,11 +135,12 @@ class PASMnetSDFRender(nn.Module):
         if self.sdf_type in ["2D_conv","MLP"]:
             est_sdf = self.sdf_filter(sampled_cost_volume)
 
+        rendered_left_depth = None
         right_14 = F.interpolate(x_right, scale_factor=1/4, mode='bilinear', align_corners=False)
         d = torch.arange(0, max_disp // 4, device=right_14.device, dtype=right_14.dtype)
         warper = DispWarper(image_size=right_14.shape[2:], disp_range=d, device=right_14.device)  # FIXME: Added!!!
         color_grid = warper.get_warped_frame(right_14, direct=-1)
-        rendered_left, weights_sum = self.render(est_sdf, color_grid)
+        rendered_left, weights_sum, rendered_left_depth, warped_left = self.render(est_sdf, color_grid, right_14)
 
         # Disparity Refinement: A sample layer with initial 1/4 level feature as the guidance.
         disp = self.refine(fea_refine, disp_s3)
@@ -149,7 +150,7 @@ class PASMnetSDFRender(nn.Module):
                    [att_s1, att_s2, att_s3], \
                    [att_cycle_s1, att_cycle_s2, att_cycle_s3], \
                    [valid_mask_s1, valid_mask_s2, valid_mask_s3],est_sdf, \
-                   rendered_left, weights_sum
+                   rendered_left, weights_sum, rendered_left_depth, warped_left
 
         else:
             return disp

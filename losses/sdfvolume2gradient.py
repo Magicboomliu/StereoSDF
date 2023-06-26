@@ -29,7 +29,7 @@ def SDF2Graident(sdf_volume, fx_unit=0.58, fy_unit=1.92, baseline=0.54):
     fx = fx_unit * width * (KITTI_RAW_WIDTH / CROP_WIDTH)
     fy = fy_unit * height * (KITTI_RAW_HEIGHT / CROP_HEIGHT)
     hypo_depths = torch.linspace(0, depth_num-1, depth_num).type_as(sdf_volume)
-    hypo_depths[0] += 1e-4  # precision issue
+    hypo_depths[0] += 1e-2  # precision issue
     hypo_depths = fx * baseline / hypo_depths  # convert disparity to depth
 
     z_diffs = torch.abs(hypo_depths[:-1] - hypo_depths[1:])  # (D-1, )

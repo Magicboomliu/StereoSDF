@@ -17,6 +17,7 @@ from models.PAMStereo.PASMnet import PASMnet
 from models.PAMStereo.PASMNet_SDF import PASMnetSDF
 from models.PAMStereo.PAMNet_SDF_render import PASMnetSDFRender
 from dataloader.kitti_loader import StereoDataset
+import cv2
 
 from dataloader import kitti_transform
 
@@ -247,14 +248,14 @@ class DisparityTrainer(object):
                 elif self.model =="PAMSDF":
                     output,attn_list,att_cycle,valid_mask,est_sdf= self.net(left_input,right_input,192)
                 elif self.model == 'PAMSDFRender':
-                    output,attn_list,att_cycle,valid_mask,est_sdf,rendered_left,weights_sum= self.net(left_input,right_input,192)
-                
+                    output,attn_list,att_cycle,valid_mask,est_sdf,rendered_left,weights_sum,rendered_left_depth,warped_left= self.net(left_input,right_input,192)
+
                 if self.model=='StereoNet':
                     # Loss Here
                     photo_loss = MultiScaleLoss(weights=[0.8,1.0,1.0],disp_pyramid=pyramid_disp,
                                     left_img=left_input,right_img=right_input)
                     loss = photo_loss
-                
+
                 elif self.model=='StereoNetSDF':
                     photo_loss = MultiScaleLoss(weights=[0.8,1.0,1.0],disp_pyramid=pyramid_disp,
                                     left_img=left_input,right_img=right_input)
@@ -333,17 +334,34 @@ class DisparityTrainer(object):
                     self.wandb.log({'lr': self.optimizer.state_dict()['param_groups'][0]['lr']})
 
                 if self.wandb is not None and total_steps % 100 * self.summary_freq == 0 and self.model == 'PAMSDFRender':
-                    fig, ax = plt.subplots()
-                    ax.imshow(left_14[0].permute(1, 2, 0).detach().cpu().numpy())
-                    self.wandb.log({'original_14': self.wandb.Image(fig)})
+                    fig, ax = plt.subplots(nrows=3, ncols=2)
 
-                    fig, ax = plt.subplots()
-                    ax.imshow(rendered_left[0].permute(1, 2, 0).detach().cpu().numpy())
-                    self.wandb.log({'rendered_14': self.wandb.Image(fig)})
+                    vis = left_14[0].permute(1, 2, 0).detach().cpu().numpy()
+                    h, w, _ = vis.shape
+                    ax[0, 0].imshow(cv2.resize(vis, (2*w, 2*h)))
+                    rendered_left_vis = rendered_left[0].permute(1, 2, 0).detach().cpu().numpy()
+                    ax[1, 0].imshow(cv2.resize(rendered_left_vis, (2*w, 2*h)))
 
-                    fig, ax = plt.subplots() 
-                    ax.imshow(valid_mask[-1][0][0].permute(1, 2, 0).detach().cpu().numpy(), cmap='gray')
-                    self.wandb.log({'valid_mask': self.wandb.Image(fig)})
+                    if rendered_left_depth is not None:
+                        rendered_left_depth_vis = rendered_left_depth[0].permute(1, 2, 0).detach().cpu().numpy()
+                        ax[0, 1].imshow(cv2.resize((1 - rendered_left_depth_vis) / np.max(rendered_left_depth_vis), (2*w, 2*h)), cmap='jet')
+
+                    if warped_left is not None:
+                        warped_left_vis = warped_left[0].petmute(1, 2, 0).detach().cpu().numpy()
+                        ax[2, 0].imshow(cv2.resize(warped_left_vis, (2*w, 2*h)))
+
+                    valid_mask_vis = valid_mask[-1][0][0].permute(1, 2, 0).detach().cpu().numpy()
+                    ax[1, 1].imshow(cv2.resize(valid_mask_vis, (2*w, 2*h)))
+
+                    self.wandb.log({'Visulization': self.wandb.Image(fig)})
+
+                    # fig, ax = plt.subplots()
+                    # ax.imshow(rendered_left[0].permute(1, 2, 0).detach().cpu().numpy())
+                    # self.wandb.log({'rendered_14': self.wandb.Image(fig)})
+
+                    # fig, ax = plt.subplots()
+                    # ax.imshow(valid_mask[-1][0][0].permute(1, 2, 0).detach().cpu().numpy(), cmap='gray')
+                    # self.wandb.log({'valid_mask': self.wandb.Image(fig)})
 
                 # launch evaluation
                 if total_steps % self.val_freq == 0:

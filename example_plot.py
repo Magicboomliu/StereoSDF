@@ -112,10 +112,12 @@ def main():
     H = 160 - 1
     W = 240 -1
     if tester1.model =="PAMSDF":
-        output,attn_list,att_cycle,valid_mask,est_sdf= tester1.net(left_input,right_input,192)
+        with torch.no_grad():
+            output,attn_list,att_cycle,valid_mask,est_sdf= tester1.net(left_input,right_input,192)
         plot(output[0].squeeze(0), est_sdf[0], H, W, exp='PAMSDF')
     if tester2.model == 'PAMSDFRender':
-        output,attn_list,att_cycle,valid_mask,est_sdf,rendered_left,weights_sum= tester2.net(left_input,right_input,192)
+        with torch.no_grad():
+            output,attn_list,att_cycle,valid_mask,est_sdf,rendered_left,weights_sum= tester2.net(left_input,right_input,192)
         plot(output[0].squeeze(0), est_sdf[0], H, W, exp='PAMSDFRender')
 if __name__ == '__main__':
     main()

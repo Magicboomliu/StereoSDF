@@ -153,6 +153,12 @@ class NeuSRenderer(nn.Module):
         color = (color_batch[:, :-1, :] * weights[:, :, None]).sum(dim=1)  # (512, 3)
         depth = (hypo_depths[None, :-1, None] * weights[:, :, None]).sum(dim=1)  # (512, 1)
 
+        # print('hypo depth')
+        # print(hypo_depths)
+        # print('weights')
+        # print(weights[0])
+        # print('\n')
+
         return color, weights, weights_sum, depth
 
     def batchify(self, sdf_grid, color_grid, hypo_depths, chunk=1024*32):
@@ -174,7 +180,6 @@ class NeuSRenderer(nn.Module):
 
         return color_list, weights_list, weights_sum_list, depth_list
 
-
     def forward(self, sdf_grid, color_grid, right, is_debug=True):
         """
         sdf_grid: (B, D, H, W)
@@ -187,7 +192,7 @@ class NeuSRenderer(nn.Module):
         fx = self.fx_unit * W * (KITTI_RAW_WIDTH / CROP_WIDTH)
         fy = self.fy_unit * H * (KITTI_RAW_HEIGHT / CROP_HEIGHT)
         hypo_depths = torch.linspace(0, D-1, D).type_as(sdf_grid)
-        hypo_depths[0] += 1e-2  # precision issue
+        hypo_depths[0] += 1e-4  # precision issue
         hypo_depths = fx * self.baseline / hypo_depths  # convert disparity to depth
         hypo_depths = torch.flip(hypo_depths, dims=[0])  # 沿着depth从小到大的方向
 
@@ -204,12 +209,14 @@ class NeuSRenderer(nn.Module):
         depth = depth.reshape(B, H, W, 1).permute(0, 3, 1, 2)
 
         warped_color = None
+        disparity = None
         if is_debug:
             disparity = fx * self.baseline / depth
+            # print(disparity)
 
             warped_color = disp_warp(right, disparity)
 
-        return color, weights_sum, depth, warped_color
+        return color, weights_sum, disparity, warped_color
 
 
 class VolSDFRenderer(object):

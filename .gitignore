@@ -6,3 +6,4 @@ wandb/*
 logs/*
 visualization/output/*
 visualization/test_data/*
+__pycache__

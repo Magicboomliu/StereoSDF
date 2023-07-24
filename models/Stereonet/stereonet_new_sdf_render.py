@@ -173,11 +173,6 @@ class StereoNetSDFRender(nn.Module):
         d = torch.arange(0, self.max_disp, device=x.device, dtype=x.dtype)
         x = torch.sum(x * d.view(1, -1, 1, 1), dim=1, keepdim=True)
 
-        right_18 = F.interpolate(right_img, scale_factor=1/8, mode='bilinear', align_corners=False)
-        warper = DispWarper(image_size=right_18.shape[2:], disp_range=d, device=x.device)  # FIXME: Added!!!
-        color_grid = warper.get_warped_frame(right_18, direct=-1)
-        rendered_left, weights_sum = self.render(est_sdf, color_grid)
-
         multi_scale = []
         for refine in self.refine_layer:
             x = refine(x, left_img)
@@ -188,9 +183,6 @@ class StereoNetSDFRender(nn.Module):
         return {
             "disp": multi_scale[-1],
             "multi_scale": multi_scale,
-            'sdf':est_sdf,
-            'rendered_left': rendered_left,
-            'weights_sum': weights_sum,
             'left_volume': cost_volume,
             'left_feature': lf,
             'right_feature': rf

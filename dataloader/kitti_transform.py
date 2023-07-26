@@ -78,6 +78,8 @@ class RandomCrop(object):
 
     def __call__(self, sample):
         ori_height, ori_width = sample['img_left'].shape[:2]
+        self.offset_x = 0
+        self.offset_y = 0
         if self.img_height > ori_height or self.img_width > ori_width:
             top_pad = self.img_height - ori_height
             right_pad = self.img_width - ori_width
@@ -142,6 +144,8 @@ class RandomCrop(object):
                 sample['gt_normal'] = self.crop_img(sample['gt_normal'])
             if 'pseudo_disp' in sample.keys():
                 sample['pseudo_disp'] = self.crop_img(sample['pseudo_disp'])
+            sample['x_offset'] = self.offset_x
+            sample['y_offset'] = self.offset_y
 
         return sample
 

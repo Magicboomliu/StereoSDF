@@ -113,16 +113,118 @@ def disp_warp(right, disparity):
     return warped_frame
 
 
+# class NeuSRenderer(nn.Module):
+#     def __init__(self, init_val=0.3, fx_unit=0.58, fy_unit=1.92, baseline=0.54):
+#         super(NeuSRenderer, self).__init__()
+#         self.register_parameter('variance', nn.Parameter(torch.tensor(init_val)))
+
+#         self.fx_unit = fx_unit
+#         self.fy_unit = fy_unit
+#         self.baseline = baseline
+
+#     def render_core(self, sdf_batch, color_batch, hypo_depths):
+#         """
+#         sdf_batch: (512, D)
+#         color_batch: (512, D, 3)
+#         """
+#         batch_size, n_samples = sdf_batch.shape
+
+#         # 转换函数的超参
+#         inv_s = torch.ones([batch_size * (n_samples - 1), 1],
+#                            dtype=sdf_batch.dtype, device=sdf_batch.device) \
+#                 * torch.exp(self.variance * 10.0)  # (512 * (D-1), 1)
+
+#         # 不是NeuS的mid_point采样，所以next_sdf和prev_sdf在sample维度少1
+#         next_sdf = sdf_batch[:, 1:].reshape(-1, 1)  # (512 * (D-1), 1)
+#         prev_sdf = sdf_batch[:, :-1].reshape(-1, 1)  # (512 * (D-1), 1)
+
+#         next_cdf = torch.sigmoid(next_sdf * inv_s)  # (512 * (D-1), 1)
+#         prev_cdf = torch.sigmoid(prev_sdf * inv_s)  # (512 * (D-1), 1)
+
+#         p = prev_cdf - next_cdf  # equation 13 分子
+#         c = prev_cdf  # equation 13 分母
+#         alpha = ((p + 1e-5) / (c + 1e-5)).reshape(batch_size, n_samples - 1).clip(0.0, 1.0)  # equation 13, (512, D-1)
+
+#         weights = alpha * torch.cumprod(torch.cat([torch.ones([batch_size, 1]).to(alpha), 1. - alpha + 1e-7], -1), -1)[:, :-1]  # (512, D-1)
+#         weights_sum = weights.sum(dim=-1, keepdim=True)  # (512, 1)
+
+#         # sampled_color: (512, D-1, 3)
+#         # weights: (512, D-1)
+#         color = (color_batch[:, :-1, :] * weights[:, :, None]).sum(dim=1)  # (512, 3)
+#         depth = (hypo_depths[None, :-1, None] * weights[:, :, None]).sum(dim=1)  # (512, 1)
+
+#         # print('hypo depth')
+#         # print(hypo_depths)
+#         # print('weights')
+#         # print(weights[0])
+#         # print('\n')
+
+#         return color, weights, weights_sum, depth
+
+#     def batchify(self, sdf_grid, color_grid, hypo_depths, chunk=1024*32):
+#         color_list = []
+#         weights_list = []
+#         weights_sum_list = []
+#         depth_list = []
+#         for i in range(0, sdf_grid.shape[0], chunk):
+#             color_batch, weights_batch, weights_sum_batch, depth_batch = self.render_core(sdf_grid[i:i+chunk], color_grid[i:i+chunk], hypo_depths)
+#             color_list.append(color_batch)
+#             weights_list.append(weights_batch)
+#             weights_sum_list.append(weights_sum_batch)
+#             depth_list.append(depth_batch)
+
+#         color_list = torch.concat(color_list, dim=0)
+#         weights_list = torch.concat(weights_list, dim=0)
+#         weights_sum_list = torch.concat(weights_sum_list, dim=0)
+#         depth_list = torch.concat(depth_list, dim=0)
+
+#         return color_list, weights_list, weights_sum_list, depth_list
+
+#     def forward(self, sdf_grid, color_grid, right, is_debug=True):
+#         """
+#         sdf_grid: (B, D, H, W)
+#         color_grid: (B, 3, D, H, W)
+#         """
+#         sdf_grid = torch.flip(sdf_grid, dims=[1])  # 沿着depth从小到大的方向，排列sdf的格点
+#         color_grid = torch.flip(color_grid, dims=[2])  # 沿着depth从小到大的方向，排列color的格点
+
+#         B, D, H, W = sdf_grid.shape
+#         fx = self.fx_unit * W * (KITTI_RAW_WIDTH / CROP_WIDTH)
+#         fy = self.fy_unit * H * (KITTI_RAW_HEIGHT / CROP_HEIGHT)
+#         hypo_depths = torch.linspace(0, D-1, D).type_as(sdf_grid)
+#         hypo_depths[0] += 1e-4  # precision issue
+#         hypo_depths = fx * self.baseline / hypo_depths  # convert disparity to depth
+#         hypo_depths = torch.flip(hypo_depths, dims=[0])  # 沿着depth从小到大的方向
+
+#         sdf_grid = sdf_grid.permute(0, 2, 3, 1)
+#         sdf_grid = sdf_grid.flatten(start_dim=0, end_dim=2)  # ((B*H*W), D)
+
+#         color_grid = color_grid.permute(0, 3, 4, 2, 1)
+#         color_grid = color_grid.flatten(start_dim=0, end_dim=2)  # ((B*H*W), D, 3)
+
+#         # color, weights, weights_sum = self.render_core(sdf_grid, color_grid)
+#         color, weights, weights_sum, depth = self.batchify(sdf_grid, color_grid, hypo_depths)
+#         color = color.reshape(B, H, W, 3).permute(0, 3, 1, 2)
+#         weights_sum = weights_sum.reshape(B, H, W, 1).permute(0, 3, 1, 2)
+#         depth = depth.reshape(B, H, W, 1).permute(0, 3, 1, 2)
+
+#         warped_color = None
+#         disparity = None
+#         if is_debug:
+#             disparity = fx * self.baseline / depth
+#             # print(disparity)
+
+#             warped_color = disp_warp(right, disparity)
+
+#         return color, weights_sum, disparity, warped_color
+
+
 class NeuSRenderer(nn.Module):
-    def __init__(self, init_val=0.3, fx_unit=0.58, fy_unit=1.92, baseline=0.54):
+    def __init__(self, init_val=0.3):
         super(NeuSRenderer, self).__init__()
         self.register_parameter('variance', nn.Parameter(torch.tensor(init_val)))
 
-        self.fx_unit = fx_unit
-        self.fy_unit = fy_unit
-        self.baseline = baseline
-
-    def render_core(self, sdf_batch, color_batch, hypo_depths):
+    def render_core(self, sdf_batch, color_batch):
         """
         sdf_batch: (512, D)
         color_batch: (512, D, 3)
@@ -151,7 +253,7 @@ class NeuSRenderer(nn.Module):
         # sampled_color: (512, D-1, 3)
         # weights: (512, D-1)
         color = (color_batch[:, :-1, :] * weights[:, :, None]).sum(dim=1)  # (512, 3)
-        depth = (hypo_depths[None, :-1, None] * weights[:, :, None]).sum(dim=1)  # (512, 1)
+        # depth = (hypo_depths[None, :-1, None] * weights[:, :, None]).sum(dim=1)  # (512, 1)
 
         # print('hypo depth')
         # print(hypo_depths)
@@ -159,64 +261,46 @@ class NeuSRenderer(nn.Module):
         # print(weights[0])
         # print('\n')
 
-        return color, weights, weights_sum, depth
+        return color, weights, weights_sum
 
-    def batchify(self, sdf_grid, color_grid, hypo_depths, chunk=1024*32):
+    def batchify(self, sdf_grid, color_grid, chunk=1024*32):
         color_list = []
         weights_list = []
         weights_sum_list = []
-        depth_list = []
+        # depth_list = []
         for i in range(0, sdf_grid.shape[0], chunk):
-            color_batch, weights_batch, weights_sum_batch, depth_batch = self.render_core(sdf_grid[i:i+chunk], color_grid[i:i+chunk], hypo_depths)
+            color_batch, weights_batch, weights_sum_batch = self.render_core(sdf_grid[i:i+chunk], color_grid[i:i+chunk])
             color_list.append(color_batch)
             weights_list.append(weights_batch)
             weights_sum_list.append(weights_sum_batch)
-            depth_list.append(depth_batch)
+            # depth_list.append(depth_batch)
 
         color_list = torch.concat(color_list, dim=0)
         weights_list = torch.concat(weights_list, dim=0)
         weights_sum_list = torch.concat(weights_sum_list, dim=0)
-        depth_list = torch.concat(depth_list, dim=0)
+        # depth_list = torch.concat(depth_list, dim=0)
 
-        return color_list, weights_list, weights_sum_list, depth_list
+        return color_list, weights_list, weights_sum_list
 
-    def forward(self, sdf_grid, color_grid, right, is_debug=True):
+    def forward(self, sdf_grid, color_grid):
         """
-        sdf_grid: (B, D, H, W)
-        color_grid: (B, 3, D, H, W)
+        sdf_grid: (B, D, N)
+        color_grid: (B, 3, D, N)
         """
-        sdf_grid = torch.flip(sdf_grid, dims=[1])  # 沿着depth从小到大的方向，排列sdf的格点
-        color_grid = torch.flip(color_grid, dims=[2])  # 沿着depth从小到大的方向，排列color的格点
+        B, D, N = sdf_grid.shape
 
-        B, D, H, W = sdf_grid.shape
-        fx = self.fx_unit * W * (KITTI_RAW_WIDTH / CROP_WIDTH)
-        fy = self.fy_unit * H * (KITTI_RAW_HEIGHT / CROP_HEIGHT)
-        hypo_depths = torch.linspace(0, D-1, D).type_as(sdf_grid)
-        hypo_depths[0] += 1e-4  # precision issue
-        hypo_depths = fx * self.baseline / hypo_depths  # convert disparity to depth
-        hypo_depths = torch.flip(hypo_depths, dims=[0])  # 沿着depth从小到大的方向
+        sdf_grid = sdf_grid.permute(0, 2, 1)
+        sdf_grid = sdf_grid.flatten(start_dim=0, end_dim=1)  # (B*N, D)
 
-        sdf_grid = sdf_grid.permute(0, 2, 3, 1)
-        sdf_grid = sdf_grid.flatten(start_dim=0, end_dim=2)  # ((B*H*W), D)
-
-        color_grid = color_grid.permute(0, 3, 4, 2, 1)
-        color_grid = color_grid.flatten(start_dim=0, end_dim=2)  # ((B*H*W), D, 3)
+        color_grid = color_grid.permute(0, 3, 2, 1)
+        color_grid = color_grid.flatten(start_dim=0, end_dim=1)  # (B*N, D, 3)
 
         # color, weights, weights_sum = self.render_core(sdf_grid, color_grid)
-        color, weights, weights_sum, depth = self.batchify(sdf_grid, color_grid, hypo_depths)
-        color = color.reshape(B, H, W, 3).permute(0, 3, 1, 2)
-        weights_sum = weights_sum.reshape(B, H, W, 1).permute(0, 3, 1, 2)
-        depth = depth.reshape(B, H, W, 1).permute(0, 3, 1, 2)
+        color, weights, weights_sum = self.batchify(sdf_grid, color_grid)
+        color = color.view(B, N, 3).permute(0, 2, 1)  # (B, 3, N)
+        weights_sum = weights_sum.view(B, N, 1).permute(0, 2, 1)  # (B, 1, N)
 
-        warped_color = None
-        disparity = None
-        if is_debug:
-            disparity = fx * self.baseline / depth
-            # print(disparity)
-
-            warped_color = disp_warp(right, disparity)
-
-        return color, weights_sum, disparity, warped_color
+        return color, weights_sum
 
 
 class VolSDFRenderer(object):
@@ -233,21 +317,17 @@ class HFNeuSRenderer(object):
 
 
 if __name__ == '__main__':
-    B = 7
-    D = 10
-    H = 3
-    W = 4
-    sdf_grid = torch.randn(B, D, H, W).cuda()
-    color_grid = torch.randn(B, 3, D, H, W).cuda()
-    right = torch.randn(B, 3, H, W).cuda()
+    B = 4
+    D = 128
+    N = 256
+    sdf_grid = torch.randn(B, D, N).cuda()
+    color_grid = torch.randn(B, 3, D, N).cuda()
 
     renderer = NeuSRenderer().cuda()
 
-    color, weights_sum, depth, warped = renderer(sdf_grid, color_grid, right)
+    color, weights_sum = renderer(sdf_grid, color_grid)
     print(color.shape)
     print(weights_sum.shape)
-    print(depth.shape)
-    print(warped.shape)
 
     # right_img = torch.randn(B, 3, H, W).cuda()
     # warper = DispWarper(image_size=[H, W], disp_range=torch.arange(0, D, device='cuda', dtype=torch.float))

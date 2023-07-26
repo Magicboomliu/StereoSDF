@@ -1,10 +1,11 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import numpy as np
 
 import sys
 sys.path.append('../..')
-from models.Stereonet.render import NeuSRenderer, DispWarper
+from models.Stereonet.sampler import NeuSSampler
 
 
 def make_cost_volume(left, right, max_disp):
@@ -80,10 +81,11 @@ class RefineNet(nn.Module):
         x = self.conv0(x)
         return F.relu(disp + x)
 
-class StereoNetSDFRender(nn.Module):
-    def __init__(self,sdf_type='3D_conv', use_sdf_render=False):
+class StereoNetNewSDFRender(nn.Module):
+    def __init__(self, batch_size, sdf_type='3D_conv', use_sdf_render=False):
         super().__init__()
 
+        self.batch_size = batch_size
         self.sdf_type = sdf_type
         self.use_sdf_render = use_sdf_render
 
@@ -145,9 +147,34 @@ class StereoNetSDFRender(nn.Module):
         self.refine_layer = nn.ModuleList([RefineNet() for _ in range(self.k)])
 
         if self.use_sdf_render:
-            self.render = NeuSRenderer()
+            transform_LtoR = torch.from_numpy(np.array([[1, 0, 0, -0.54],
+                               [0, 1, 0, 0],
+                               [0, 0, 1, 0],
+                               [0, 0, 0, 1]], dtype=np.float32)).cuda()
+            transform_LtoL = torch.from_numpy(np.array([[1, 0, 0, 0],
+                               [0, 1, 0, 0],
+                               [0, 0, 1, 0],
+                               [0, 0, 0, 1]], dtype=np.float32)).cuda()
+            self.renderer = NeuSSampler(
+                batch_size=batch_size,
+                height=320,
+                width=960,
+                depth_range=[0.1, 80],
+                num_depths=128,
+                inv_K=None,
+                transform_LtoR=transform_LtoR,
+                transform_LtoL=transform_LtoL,
+                color_K=None,
+                feat_K=None,
+                color_width=960,
+                color_height=320,
+                feat_width=960 // 8,
+                feat_height=320 // 8,
+                feat_length=32,
+                cv_feat_length=24,
+                N_rand=1024)
 
-    def forward(self, left_img, right_img):
+    def forward(self, left_img, right_img, K, run_sdf=False):
         n, c, h, w = left_img.size()
 
         w_pad = (self.align - (w % self.align)) % self.align
@@ -161,13 +188,19 @@ class StereoNetSDFRender(nn.Module):
 
         cost_volume = make_cost_volume(lf, rf, self.max_disp)
 
-        if self.sdf_type =='3D_conv':
-            est_sdf = self.sdf_filter(cost_volume).squeeze(1)
-
         cost_volume = self.cost_filter(cost_volume).squeeze(1)
 
-        if self.sdf_type in ["2D_conv","MLP"]:
-            est_sdf = self.sdf_filter(cost_volume)
+        ret_dict = None
+        if self.use_sdf_render and run_sdf:
+            inv_K = torch.linalg.inv(K)
+            color_K = K
+            feat_K = 0.125 * K
+
+            self.renderer.inv_K = inv_K
+            self.renderer.color_K = color_K
+            self.renderer.feat_K = feat_K
+
+            ret_dict = self.renderer(lf, rf, cost_volume, left_img, right_img)
 
         x = F.softmax(cost_volume, dim=1)
         d = torch.arange(0, self.max_disp, device=x.device, dtype=x.dtype)
@@ -183,9 +216,7 @@ class StereoNetSDFRender(nn.Module):
         return {
             "disp": multi_scale[-1],
             "multi_scale": multi_scale,
-            'left_volume': cost_volume,
-            'left_feature': lf,
-            'right_feature': rf
+            'ret_dict': ret_dict
         }
 
 
@@ -194,7 +225,7 @@ if __name__ == "__main__":
 
     left = torch.rand(1, 3, 320, 640)
     right = torch.rand(1, 3, 320, 640)
-    model = StereoNetSDFRender(use_sdf_render=True)
+    model = StereoNetNewSDFRender(use_sdf_render=True)
 
     # H,W
     results = model(left, right)["weights_sum"]

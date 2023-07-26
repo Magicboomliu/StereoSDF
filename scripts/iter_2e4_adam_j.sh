@@ -1,12 +1,13 @@
 TRAIN_KITTI(){
-pretrain_name=PAMSDFRender
+pretrain_name=StereoNetNewSDFRender
 cd ..
 mkdir logs
 loss=config/loss_config_disp.json
 outf_model=models_saved/$pretrain_name
 logf=logs/$pretrain_name
 # datapath=/data/public_dataset/KITTI_Raw_Data
-datapath=/hdd/zsy_data/kitti_data
+# datapath=/hdd/zsy_data/kitti_data
+datapath=/hdd/zsy_data/kitti_raw
 datathread=4
 lr=2e-4
 devices=0
@@ -16,7 +17,7 @@ trainlist=filenames/kitti_raw_unos.txt
 vallist=filenames/KITTI_2015_train.txt
 startR=0
 startE=0
-batchSize=8
+batchSize=2
 testbatch=2
 maxdisp=-1
 save_logdir=experiments_logdir/$pretrain_name
@@ -25,9 +26,9 @@ pretrain=none
 initial_pretrain=none
 sdf_type=MLP
 summary_freq=10
-sdf_weight=0.01
+sdf_weight=1.0
 
-CUDA_VISIBLE_DEVICES=1 python3 -W ignore train_iter.py --cuda --loss $loss --lr $lr \
+CUDA_VISIBLE_DEVICES=0 python3 -W ignore train_iter.py --cuda --loss $loss --lr $lr \
                --outf $outf_model --logFile $logf \
                --devices $devices --batch_size $batchSize \
                --dataset $dataset --trainlist $trainlist --vallist $vallist \

@@ -3,17 +3,22 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
+from .embedder import get_embedder
+
 
 class SDF_MLP(nn.Module):
     def __init__(self, feat_length, cv_feat_length, multires=0,
                  d_hidden=128, n_layers=4, skip_in=(), geometric_init=True) -> None:
         super().__init__()
 
-        if multires == 0:
-            d_in = feat_length * 2 + cv_feat_length + 3
-            self.embed_fn_fine = None
+        self.embed_fn_fine = None
+
+        if multires > 0:
+            embed_fn, input_ch = get_embedder(multires, 3)
+            self.embed_fn_fine = embed_fn
+            d_in = feat_length * 2 + cv_feat_length + input_ch
         else:
-            raise NotImplementedError('Positional encoding is not implemented yet.')
+            d_in = feat_length * 2 + cv_feat_length + 3
         
         d_out = 1
         dims = [d_in] + [d_hidden for _ in range(n_layers)] + [d_out]
@@ -59,11 +64,11 @@ class SDF_MLP(nn.Module):
 
         self.activation = nn.Softplus(beta=100)
 
-    def forward(self, feat_left, feat_right, cv_left, xyz):
+    def forward(self, feat_left, feat_right, cv_feat_left, xyz):
         """
         feat_left: (N, F)
         feat_right: (N, F)
-        cv_left: (N, D)
+        cv_feat_left: (N, D)
         xyz: (N, 3)
 
         return: (N, 1)
@@ -71,14 +76,13 @@ class SDF_MLP(nn.Module):
         if self.embed_fn_fine is not None:
             xyz = self.embed_fn_fine(xyz)
 
-        try:
-            inputs = torch.cat([feat_left, feat_right, cv_left, xyz], dim=-1)
-        except:
-            print(feat_left.shape)
-            print(feat_right.shape)
-            print(cv_left.shape)
-            print(xyz.shape)
-            exit()
+        # try:
+        inputs = torch.cat([feat_left, feat_right, cv_feat_left, xyz], dim=-1)
+        # except:
+        #     print(feat_left.shape)
+        #     print(feat_right.shape)
+        #     print(cv_left.shape)
+        #     print(xyz.shape)
         
         x = inputs
         for l in range(0, self.num_layers - 1):
@@ -120,6 +124,6 @@ if __name__ == '__main__':
     xyz = torch.randn(512, 3)
 
     x = sdf_mlp(feat_left, feat_right, cv_left, xyz)
-    print(x.shape)
+    # print(x.shape)
     gradient = sdf_mlp.gradient(feat_left, feat_right, cv_left, xyz)
-    print(gradient.shape)
+    # print(gradient.shape)

@@ -13,6 +13,7 @@ from utils.common import logger, check_path, write_pfm,count_parameters
 from models.Stereonet.stereonet import StereoNet
 from models.Stereonet.stereonet_sdf import StereoNetSDF
 from models.Stereonet.stereonet_sdf_render import StereoNetSDFRender
+from models.Stereonet.stereonet_new_sdf_render import StereoNetNewSDFRender
 from models.PAMStereo.PASMnet import PASMnet
 from models.PAMStereo.PASMNet_SDF import PASMnetSDF
 from models.PAMStereo.PAMNet_SDF_render import PASMnetSDFRender
@@ -30,7 +31,7 @@ import os
 from torch.autograd import Variable
 
 from losses.unsupervised_loss import loss_disp_unsupervised,MultiScaleLoss,Eki_Loss
-from losses.pam_loss import PAMStereoLoss, loss_ssim_l1
+from losses.pam_loss import PAMStereoLoss, loss_ssim_l1, loss_disp_smoothness
 
 
 # IMAGENET NORMALIZATION
@@ -126,7 +127,9 @@ class DisparityTrainer(object):
         elif self.model=='StereoNetSDF':
             self.net = StereoNetSDF(sdf_type=self.sdf_type)
         elif self.model == 'StereoNetSDFRender':
-            self.net = StereoNetSDFRender(sdf_type=self.sdf_type, use_sdf_render=True)
+            self.net = StereoNetSDFRender(self.batch_size, sdf_type=self.sdf_type, use_sdf_render=True)
+        elif self.model == 'StereoNetNewSDFRender':
+            self.net = StereoNetNewSDFRender(self.batch_size, sdf_type=self.sdf_type, use_sdf_render=True)
         elif self.model == "PAM":
             self.net = PASMnet()
         elif self.model =="PAMSDF":
@@ -220,6 +223,8 @@ class DisparityTrainer(object):
         end = time.time()
         sdf_loss = None
         sdf_render_loss = None
+        sdf_warped_loss = None
+        render_depth_smooth_loss = None
 
         # load trainer
         total_steps = 0
@@ -227,7 +232,8 @@ class DisparityTrainer(object):
             for i_batch, sample_batched in enumerate(self.train_loader):
                 left_input = torch.autograd.Variable(sample_batched['img_left'].cuda(), requires_grad=False)
                 right_input = torch.autograd.Variable(sample_batched['img_right'].cuda(), requires_grad=False)
-                
+                intrinsic_K = torch.autograd.Variable(sample_batched['K'].cuda(), requires_grad=False)
+
                 data_time.update(time.time() - end)
                 self.optimizer.zero_grad()
                 
@@ -244,12 +250,15 @@ class DisparityTrainer(object):
                     est_sdf = output_staff['sdf']
                     rendered_left = output_staff['rendered_left']
                     weights_sum = output_staff['weights_sum']
+                elif self.model == 'StereoNetNewSDFRender':
+                    output_staff = self.net(left_input, right_input, intrinsic_K, run_sdf=True)
+                    pyramid_disp = output_staff["multi_scale"]
                 elif self.model == "PAM":
                     output,attn_list,att_cycle,valid_mask = self.net(left_input,right_input,192)
                 elif self.model =="PAMSDF":
                     output,attn_list,att_cycle,valid_mask,est_sdf= self.net(left_input,right_input,192)
                 elif self.model == 'PAMSDFRender':
-                    output,attn_list,att_cycle,valid_mask,est_sdf,rendered_left,weights_sum,rendered_left_depth,warped_left= self.net(left_input,right_input,192)
+                    output,attn_list,att_cycle,valid_mask,est_sdf,rendered_left,weights_sum,rendered_left_disparity,warped_left= self.net(left_input,right_input,192)
 
                 if self.model=='StereoNet':
                     # Loss Here
@@ -269,11 +278,41 @@ class DisparityTrainer(object):
                     sdf_loss = Eki_Loss(est_sdf=est_sdf)
                     left_18 = F.interpolate(left_input, scale_factor=1/8, mode='bilinear', align_corners=False)
                     sdf_render_loss = F.l1_loss(left_18, rendered_left, size_average=True, reduction='mean')
-                    
-                    # FIXME : beta 
+
+                    # FIXME : beta
                     # beta = 0.01
                     loss = photo_loss + sdf_loss * self.sdf_weight + sdf_render_loss * 0.1
                     
+                    render_loss_meter.update(sdf_render_loss.data.item(), left_input.size(0))
+                    eki_loss_meter.update(sdf_loss.data.item(),left_input.size(0))
+                elif self.model == 'StereoNetNewSDFRender':
+                    photo_loss = MultiScaleLoss(weights=[0.8,1.0,1.0],disp_pyramid=pyramid_disp,
+                                    left_img=left_input,right_img=right_input)
+
+                    ret_dict = output_staff['ret_dict']
+                    left_ray_render = ret_dict['left_ray_render']
+                    left_ray_gt = ret_dict['left_ray_gt']
+                    left_ray_weight = ret_dict['left_ray_weight']
+                    sdf_gradient = ret_dict['sdf_gradient']
+                    b_size, n_samples_per_ray, n_ray, _, _ = sdf_gradient.shape
+                    sdf_gradient = sdf_gradient[..., 0, :] # (B, N_sample, N_ray, 3)
+
+                    print('left_ray_render', left_ray_render.shape)
+                    print('left_ray_gt', left_ray_gt.shape)
+                    print('left_ray_weight', left_ray_weight.shape)
+                    print('sdf_gradient', sdf_gradient.shape)
+                    
+                    # sdf render loss
+                    sdf_render_loss = torch.abs(left_ray_render - left_ray_gt).mean(dim=1)
+                    sdf_render_loss = torch.mean(left_ray_weight * sdf_render_loss)
+
+                    # sdf gradient loss
+                    sdf_gradient = (torch.linalg.norm(sdf_gradient.reshape(b_size, n_samples_per_ray * n_ray, 3), ord=2,
+                                            dim=-1) - 1.0) ** 2
+                    sdf_loss = sdf_gradient.sum() / (b_size * n_samples_per_ray * n_ray)
+
+                    loss = photo_loss + sdf_loss * self.sdf_weight + sdf_render_loss
+
                     render_loss_meter.update(sdf_render_loss.data.item(), left_input.size(0))
                     eki_loss_meter.update(sdf_loss.data.item(),left_input.size(0))
                 elif self.model =='PAM':
@@ -297,11 +336,16 @@ class DisparityTrainer(object):
                     # FIXME : beta
                     # beta = 0.01
                     left_14 = F.interpolate(left_input, scale_factor=1/4, mode='bilinear', align_corners=False)
+                    right_14 = F.interpolate(right_input, scale_factor=1/4, mode='bilinear', align_corners=False)
                     # sdf_render_loss = F.l1_loss(left_14, rendered_left, size_average=True, reduction='mean')
                     sdf_render_loss = loss_ssim_l1(left_14, rendered_left, valid_mask[-1][0])
                     # print(valid_mask[-1][0].shape)
+                    # sdf_warped_loss = loss_ssim_l1(left_14, warped_left, valid_mask[-1][0])
 
-                    loss = loss + sdf_loss * self.sdf_weight + sdf_render_loss * 0.1
+                    # render_depth_smooth_loss = loss_disp_smoothness(rendered_left_disparity, left_14)
+
+                    # loss = loss + sdf_loss * self.sdf_weight + sdf_render_loss * 0.1 + sdf_warped_loss * 0.1 + render_depth_smooth_loss * 1e-4
+                    loss = loss + sdf_loss * self.sdf_weight + sdf_render_loss * 10
 
                     render_loss_meter.update(sdf_render_loss.data.item(), left_input.size(0))
                     eki_loss_meter.update(sdf_loss.data.item(),left_input.size(0))
@@ -331,28 +375,45 @@ class DisparityTrainer(object):
                         self.wandb.log({'eikonal_loss': (sdf_loss * self.sdf_weight).data.cpu().numpy()})
                     if sdf_render_loss is not None:
                         self.wandb.log({'sdf render loss': (sdf_render_loss * 0.1).data.cpu().numpy()})
+                    if sdf_warped_loss is not None:
+                        self.wandb.log({'sdf warped loss': (sdf_warped_loss * 0.1).data.cpu().numpy()})
+                    if render_depth_smooth_loss is not None:
+                        self.wandb.log({'sdf depth smooth loss': (render_depth_smooth_loss * 1e-4).data.cpu().numpy()})
                     # self.wandb.log({'learning_rate': cur_lr})
                     self.wandb.log({'lr': self.optimizer.state_dict()['param_groups'][0]['lr']})
 
                 if self.wandb is not None and total_steps % 100 * self.summary_freq == 0 and self.model == 'PAMSDFRender':
-                    fig, ax = plt.subplots(nrows=3, ncols=2)
+                    fig, ax = plt.subplots(nrows=4, ncols=2)
 
-                    left_14_vis = left_14[0].permute(1, 2, 0).detach().cpu().numpy()
+                    left_14_vis = left_14[0].permute(1, 2, 0).detach().cpu().numpy().clip(0.0, 1.0)
                     h, w, _ = left_14_vis.shape
                     ax[0, 0].imshow(cv2.resize(left_14_vis, (2*w, 2*h)))
-                    rendered_left_vis = rendered_left[0].permute(1, 2, 0).detach().cpu().numpy()
+                    ax[0, 0].set_title('Original Left')
+                    rendered_left_vis = rendered_left[0].permute(1, 2, 0).detach().cpu().numpy().clip(0.0, 1.0)
                     ax[1, 0].imshow(cv2.resize(rendered_left_vis, (2*w, 2*h)))
+                    ax[1, 0].set_title('Rendered Left')
 
-                    if rendered_left_depth is not None:
-                        rendered_left_depth_vis = rendered_left_depth[0].permute(1, 2, 0).detach().cpu().numpy()
-                        ax[0, 1].imshow(cv2.resize((1 - rendered_left_depth_vis) / np.max(rendered_left_depth_vis), (2*w, 2*h)), cmap='jet')
+                    if rendered_left_disparity is not None:
+                        rendered_left_disparity_vis = rendered_left_disparity[0].permute(1, 2, 0).detach().cpu().numpy()
+                        ax[0, 1].imshow(cv2.resize((rendered_left_disparity_vis / np.percentile(rendered_left_disparity_vis, 90)).clip(0.0, 1.0), (2*w, 2*h)), cmap='jet')
+                        ax[0, 1].set_title('Rendered Left Disparity')
 
                     if warped_left is not None:
-                        warped_left_vis = warped_left[0].petmute(1, 2, 0).detach().cpu().numpy()
+                        warped_left_vis = warped_left[0].permute(1, 2, 0).detach().cpu().numpy().clip(0.0, 1.0)
                         ax[2, 0].imshow(cv2.resize(warped_left_vis, (2*w, 2*h)))
+                        ax[2, 0].set_title('Warped Left')
 
-                    valid_mask_vis = valid_mask[-1][0][0].permute(1, 2, 0).detach().cpu().numpy()
-                    ax[1, 1].imshow(cv2.resize(valid_mask_vis, (2*w, 2*h)))
+                    valid_mask_vis = valid_mask[-1][0][0].permute(1, 2, 0).detach().cpu().numpy().clip(0.0, 1.0)
+                    ax[1, 1].imshow(cv2.resize(valid_mask_vis, (2*w, 2*h)), cmap='gray')
+                    ax[1, 1].set_title('Mask')
+
+                    right_14_vis = right_14[0].permute(1, 2, 0).detach().cpu().numpy().clip(0.0, 1.0)
+                    ax[2, 1].imshow(cv2.resize(right_14_vis, (2*w, 2*h)))
+                    ax[2, 1].set_title('Original Right')
+
+                    left_disparity_vis = output[0].permute(1, 2, 0).detach().cpu().numpy()
+                    ax[3, 1].imshow(cv2.resize(left_disparity_vis / np.max(left_disparity_vis), (2*w, 2*h)), cmap='jet')
+                    ax[3, 1].set_title('Left Disparity')
 
                     self.wandb.log({'Visulization': self.wandb.Image(fig)})
 
@@ -417,6 +478,9 @@ class DisparityTrainer(object):
 
                 elif self.model in ["PAM","PAMSDF","PAMSDFRender"]:
                     output = self.net(left_input_pad,right_input_pad)
+                
+                elif self.model in ["StereoNetNewSDFRender"]:
+                    output = self.net(left_input_pad,right_input_pad, None, False)['disp']
 
                 output = output[:,:,h_pad:,w_pad:]
                 assert output.shape ==target_disp.shape

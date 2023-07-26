@@ -10,6 +10,7 @@ from utils.kitti_io import read_img, read_disp,read_kitti_step1,read_kitti_step2
 from skimage import io, transform
 import numpy as np
 from PIL import Image
+import torch
 
 def compute_left_occ_region(w, disp):
     """
@@ -103,6 +104,11 @@ class StereoDataset(Dataset):
 
             self.samples.append(sample)
 
+        self.K = np.array([[7.215377e+02, 0.000000e+00, 6.095593e+02, 0.0],
+                           [0.000000e+00, 7.215377e+02, 1.728540e+02, 0.0],
+                           [0.000000e+00, 0.000000e+00, 1.000000e+00, 0.0],
+                           [0.0, 0.0, 0.0, 1.0]], dtype=np.float32)
+
     def __getitem__(self, index):
         sample = {}
         sample_path = self.samples[index]
@@ -145,6 +151,12 @@ class StereoDataset(Dataset):
             
         if self.transform is not None:
             sample = self.transform(sample)
+
+            sample['K'] = np.array([[self.K[0, 0], 0.0, self.K[0, 2] - sample['x_offset'], 0.0],
+                                    [0.0, self.K[1, 1], self.K[1, 2] - sample['y_offset'], 0.0],
+                                    [0.0, 0.0, 1.0, 0.0],
+                                    [0.0, 0.0, 0.0, 1.0]], dtype=np.float32)
+            sample['K'] = torch.from_numpy(sample['K'])
 
         return sample
 

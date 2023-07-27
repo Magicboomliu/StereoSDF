@@ -38,7 +38,7 @@ def main(opt):
         import wandb
         # init wandb
         group_name = 'jiang_model_%s_sdf_%s_cos_lr' % (opt.model, opt.sdf_type)
-        name = 'batch_size_%d_sdf_weight_%.2f_lr_%f_optim_%s' % (opt.batchSize, opt.sdf_weight, opt.lr, opt.optimizer)
+        name = 'batch_size_%d_sdf_weight_%.2f_lr_%f_optim_%s' % (opt.batch_size, opt.sdf_weight, opt.lr, opt.optimizer)
         wandb.init(
             project = 'stereo_sdf',
             group = group_name,

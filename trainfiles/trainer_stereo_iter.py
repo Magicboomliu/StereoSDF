@@ -297,10 +297,10 @@ class DisparityTrainer(object):
                     b_size, n_samples_per_ray, n_ray, _, _ = sdf_gradient.shape
                     sdf_gradient = sdf_gradient[..., 0, :] # (B, N_sample, N_ray, 3)
 
-                    print('left_ray_render', left_ray_render.shape)
-                    print('left_ray_gt', left_ray_gt.shape)
-                    print('left_ray_weight', left_ray_weight.shape)
-                    print('sdf_gradient', sdf_gradient.shape)
+                    # print('left_ray_render', left_ray_render.shape)
+                    # print('left_ray_gt', left_ray_gt.shape)
+                    # print('left_ray_weight', left_ray_weight.shape)
+                    # print('sdf_gradient', sdf_gradient.shape)
                     
                     # sdf render loss
                     sdf_render_loss = torch.abs(left_ray_render - left_ray_gt).mean(dim=1)

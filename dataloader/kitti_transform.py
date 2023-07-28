@@ -116,6 +116,9 @@ class RandomCrop(object):
                                                    mode='constant',
                                                    constant_values=0)
 
+            sample['x_offset'] = self.offset_x
+            sample['y_offset'] = self.offset_y
+
         else:
             assert self.img_height <= ori_height and self.img_width <= ori_width
 

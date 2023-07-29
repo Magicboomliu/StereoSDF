@@ -75,11 +75,11 @@ class RandomCrop(object):
         self.img_height = img_height
         self.img_width = img_width
         self.validate = validate
+        self.offset_x = 0
+        self.offset_y = 0
 
     def __call__(self, sample):
         ori_height, ori_width = sample['img_left'].shape[:2]
-        self.offset_x = 0
-        self.offset_y = 0
         if self.img_height > ori_height or self.img_width > ori_width:
             top_pad = self.img_height - ori_height
             right_pad = self.img_width - ori_width

@@ -116,9 +116,6 @@ class RandomCrop(object):
                                                    mode='constant',
                                                    constant_values=0)
 
-            sample['x_offset'] = self.offset_x
-            sample['y_offset'] = self.offset_y
-
         else:
             assert self.img_height <= ori_height and self.img_width <= ori_width
 
@@ -147,8 +144,9 @@ class RandomCrop(object):
                 sample['gt_normal'] = self.crop_img(sample['gt_normal'])
             if 'pseudo_disp' in sample.keys():
                 sample['pseudo_disp'] = self.crop_img(sample['pseudo_disp'])
-            sample['x_offset'] = self.offset_x
-            sample['y_offset'] = self.offset_y
+
+        sample['x_offset'] = self.offset_x
+        sample['y_offset'] = self.offset_y
 
         return sample
 

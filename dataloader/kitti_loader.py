@@ -152,6 +152,10 @@ class StereoDataset(Dataset):
         if self.transform is not None:
             sample = self.transform(sample)
 
+            if 'x_offset' not in sample:
+                sample['x_offset'] = 0
+                sample['y_offset'] = 0
+
             sample['K'] = np.array([[self.K[0, 0], 0.0, self.K[0, 2] - sample['x_offset'], 0.0],
                                     [0.0, self.K[1, 1], self.K[1, 2] - sample['y_offset'], 0.0],
                                     [0.0, 0.0, 1.0, 0.0],

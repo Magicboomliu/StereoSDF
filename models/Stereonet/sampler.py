@@ -68,6 +68,9 @@ class Project3D:
         self.source_width = source_width
         self.eps = eps
 
+        self.x_offset = None
+        self.y_offset = None
+
     def forward(self, points, K, T):
         points = points.cpu()
         K = K.cpu()
@@ -83,8 +86,8 @@ class Project3D:
         pix_coords = cam_points[:, :2, :] / (cam_points[:, 2, :].unsqueeze(1) + self.eps)
         pix_coords = pix_coords.view(self.batch_size, 2, self.num_depths, self.source_height, self.source_width)  # (B, 2, D, H, W)
         pix_coords = pix_coords.permute(0, 2, 3, 4, 1)  # (B, D, H, W, 2)
-        pix_coords[..., 0] /= self.width - 1
-        pix_coords[..., 1] /= self.height - 1
+        pix_coords[..., 0] = (pix_coords[..., 0] + self.x_offset) / self.width - 1
+        pix_coords[..., 1] = (pix_coords[..., 1] + self.y_offset) / self.height - 1
         pix_coords = (pix_coords - 0.5) * 2  # (B, D, H, W, 2)
 
         valid_mask = pix_coords.abs().max(dim=-1)[0] <= 1  # (B, D, H, W)

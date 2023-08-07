@@ -203,8 +203,11 @@ class StereoNetNewSDFRender(nn.Module):
             self.renderer.inv_K = inv_K
             self.renderer.color_K = color_K
             self.renderer.feat_K = feat_K
+
             self.renderer.project_color.x_offset = x_offset
             self.renderer.project_color.y_offset = y_offset
+            self.renderer.project_feat.x_offset = x_offset / 8
+            self.renderer.project_feat.y_offset = y_offset / 8
 
             ret_dict = self.renderer(lf, rf, cost_volume, left_img, right_img)
 

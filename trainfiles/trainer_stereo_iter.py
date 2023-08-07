@@ -233,8 +233,8 @@ class DisparityTrainer(object):
                 left_input = torch.autograd.Variable(sample_batched['img_left'].cuda(), requires_grad=False)
                 right_input = torch.autograd.Variable(sample_batched['img_right'].cuda(), requires_grad=False)
                 intrinsic_K = torch.autograd.Variable(sample_batched['K'].cuda(), requires_grad=False)
-                x_offset = torch.tensor(sample_batched['x_offset'])
-                y_offset = torch.tensor(sample_batched['y_offset'])
+                x_offset = torch.tensor(sample_batched['x_offset'], device=intrinsic_K.device)
+                y_offset = torch.tensor(sample_batched['y_offset'], device=intrinsic_K.device)
                 data_time.update(time.time() - end)
                 self.optimizer.zero_grad()
                 

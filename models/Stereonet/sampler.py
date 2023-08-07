@@ -171,33 +171,22 @@ class NeuSSampler(nn.Module):
     def forward(self, left_feat, right_feat, left_cv_feat, left_img, right_img):
         cam_points, D_planes = self.backproject.forward(self.depth_range, self.inv_K)  # ((B, 4, DHW)), (D,)
 
-        # # get color
-        # pix_coords_color, valid_mask_color = self.project_color(cam_points, self.color_K, self.transform_LtoR)  # (B, DH, W, 2), (B, DH, W)
-        # sampled_color_grid = F.grid_sample(left_img, pix_coords_color, mode='bilinear', padding_mode='zeros', align_corners=True)  # (B, 3, DH, W)
-        # sampled_color_grid = sampled_color_grid.view(self.batch_size, 3, self.num_depths, self.height, self.width)  # (B, 3, D, H, W)
-
-        # # get sdf
-        # pix_coords_feat, valid_mask_feat = self.project_feat(cam_points, self.feat_K, self.transform_LtoR)  # (B, DH, W, 2), (B, DH, W)
-        # sampled_left_feat = F.grid_sample(left_feat, pix_coords_feat, mode='bilinear', padding_mode='zeros', align_corners=True)  # (B, F, DH, W)
-        # sampled_left_feat = sampled_left_feat.view(self.batch_size, self.feat_length, self.num_depths, self.height, self.width)  # (B, F, D, H, W)
-
-        # # sampled_right_feat = right_feat[:, :, None, ...].repeat(1, 1, self.num_depths, 1, 1)  # (B, F, D, H, W)
-        # pix_coords_feat_right, _ = self.project_feat(cam_points, self.feat_K, self.transform_LtoL)
-        # sampled_right_feat = F.grid_sample(right_feat, pix_coords_feat_right, mode='bilinear', padding_mode='zeros', align_corners=True)  # (B, F, DH, W)
-        # sampled_right_feat = sampled_left_feat.view(self.batch_size, self.feat_length, self.num_depths, self.height, self.width)  # (B, F, D, H, W)
-
-        # sampled_left_cv = F.grid_sample(left_volume, pix_coords_feat, mode='bilinear', padding_mode='zeros', align_corners=True)  # (B, Cd, DH, W)
-        # sampled_left_cv = sampled_left_cv.view(self.batch_size, self.cv_feat_length, self.num_depths, self.height, self.width)  # (B, Cd, D, H, W)
-
-        # xyz = cam_points[:, :3, ...]  # (B, 3, DHW)
-        # xyz = xyz.view(self.batch_size, 3, self.num_depths, self.height, self.width)  # (B, 3, D, H, W)
 
         select_inds = np.random.choice(self.height * self.width, size=[self.N_rand], replace=False)  # (N_rand,)
 
         # get color for ground-truth
-        left_img_gt = left_img.view(self.batch_size, 3, self.height * self.width)
-        left_img_gt = left_img_gt[..., select_inds]  # (B, 3, N)
-
+#        left_img_gt = left_img.view(self.batch_size, 3, self.height * self.width)
+#        left_img_gt = left_img_gt[..., select_inds]  # (B, 3, N)
+#
+        pix_coords_color, valid_mask_color = self.project_color.forward(cam_points, self.color_K, self.transform_LtoL)  # (B, D, H, W, 2), (B, D, H, W)
+        pix_coords_color, valid_mask_color = select_data(pix_coords_color, valid_mask_color, select_inds)  # (B, D, N, 2), (B, D, N)
+        pix_coords_color = pix_coords_color.cuda()
+        valid_mask_color = valid_mask_color.cuda()
+        weight = torch.sum(valid_mask_color, dim=1) / self.num_depths
+        left_img_gt = F.grid_sample(left_img, pix_coords_color, mode='bilinear', padding_mode='zeros', align_corners=True)  # (B, 3, D, N)
+        left_img_gt = left_img_gt[:, :, 0]
+        print('weight for color gt', weight)
+        import pdb; pdb.set_trace()
         # get color for rendering
         pix_coords_color, valid_mask_color = self.project_color.forward(cam_points, self.color_K, self.transform_LtoR)  # (B, D, H, W, 2), (B, D, H, W)
         pix_coords_color, valid_mask_color = select_data(pix_coords_color, valid_mask_color, select_inds)  # (B, D, N, 2), (B, D, N)
@@ -236,7 +225,7 @@ class NeuSSampler(nn.Module):
 
         # render
         left_img_render, _ = self.render(sdf_grid, sampled_color_grid)
-
+        print(weight.max())
         return {
             'left_ray_render': left_img_render,
             'left_ray_gt': left_img_gt,

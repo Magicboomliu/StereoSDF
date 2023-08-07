@@ -157,8 +157,8 @@ class StereoNetNewSDFRender(nn.Module):
                                [0, 0, 0, 1]], dtype=np.float32)).cuda()
             self.renderer = NeuSSampler(
                 batch_size=batch_size,
-                height=40,
-                width=120,
+                height=320,
+                width=960,
                 depth_range=[0.1, 80],
                 num_depths=128,
                 inv_K=None,
@@ -192,13 +192,9 @@ class StereoNetNewSDFRender(nn.Module):
 
         ret_dict = None
         if self.use_sdf_render and run_sdf:
-            inv_K = torch.linalg.inv(K) * 8
-            inv_K[..., 2, 2] = 1
-            inv_K[..., 3, 3] = 1
+            inv_K = torch.linalg.inv(K)
             color_K = K
             feat_K = 0.125 * K
-            feat_K[..., 2, 2] = 1
-            feat_K[..., 3, 3] = 1
 
             self.renderer.inv_K = inv_K
             self.renderer.color_K = color_K

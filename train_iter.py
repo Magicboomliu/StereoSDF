@@ -70,8 +70,17 @@ def main(opt):
     trainer.launch_training()
     wandb.finish()
     
+# for debug
+def attach_debugger():
+    import debugpy
+    debugpy.listen(5678)
+    print("Waiting for debugger!")
+    debugpy.wait_for_client()
+    print("Attached!")
+    
 
 if __name__ == '__main__':
+
     parser = argparse.ArgumentParser()
     parser.add_argument('--net', type=str, help='indicates the name of net', default='simplenet')
     parser.add_argument('--loss', type=str, help='indicates the loss scheme', default='simplenet_flying')

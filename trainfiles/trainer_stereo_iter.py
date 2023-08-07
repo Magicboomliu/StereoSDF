@@ -357,7 +357,6 @@ class DisparityTrainer(object):
                     loss = np.sum(loss)
                 
                 losses.update(loss.data.item(), left_input.size(0))
-                
                 loss.backward()
                 self.optimizer.step()
                 self.lr_scheduler.step()
@@ -365,8 +364,11 @@ class DisparityTrainer(object):
 
                 # measure elapsed time
                 batch_time.update(time.time() - end)
-                end = time.time()                
-                
+                end = time.time()               
+                if total_steps % self.summary_freq == 0:
+                    logger.info('total step is %d, photometric loss is %.3f, %.3f' % (total_steps, photo_loss.data.cpu().numpy(), sdf_render_loss.data.cpu().numpy()))
+
+
                 # update training logs
                 if self.wandb is not None and total_steps % self.summary_freq == 0:
                     logger.info('total step is %d, photometric loss is %.3f' % (total_steps, photo_loss.data.cpu().numpy()))

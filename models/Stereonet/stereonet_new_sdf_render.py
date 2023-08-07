@@ -174,7 +174,7 @@ class StereoNetNewSDFRender(nn.Module):
                 cv_feat_length=24,
                 N_rand=1024)
 
-    def forward(self, left_img, right_img, K, run_sdf=False):
+    def forward(self, left_img, right_img, K, x_offset=0, y_offset=0, run_sdf=False):
         n, c, h, w = left_img.size()
 
         w_pad = (self.align - (w % self.align)) % self.align
@@ -203,6 +203,8 @@ class StereoNetNewSDFRender(nn.Module):
             self.renderer.inv_K = inv_K
             self.renderer.color_K = color_K
             self.renderer.feat_K = feat_K
+            self.renderer.project_color.x_offset = x_offset
+            self.renderer.project_color.y_offset = y_offset
 
             ret_dict = self.renderer(lf, rf, cost_volume, left_img, right_img)
 

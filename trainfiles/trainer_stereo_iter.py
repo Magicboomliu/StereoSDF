@@ -233,7 +233,8 @@ class DisparityTrainer(object):
                 left_input = torch.autograd.Variable(sample_batched['img_left'].cuda(), requires_grad=False)
                 right_input = torch.autograd.Variable(sample_batched['img_right'].cuda(), requires_grad=False)
                 intrinsic_K = torch.autograd.Variable(sample_batched['K'].cuda(), requires_grad=False)
-
+                x_offset = torch.tensor(sample_batched['x_offset'])
+                y_offset = torch.tensor(sample_batched['y_offset'])
                 data_time.update(time.time() - end)
                 self.optimizer.zero_grad()
                 
@@ -251,7 +252,7 @@ class DisparityTrainer(object):
                     rendered_left = output_staff['rendered_left']
                     weights_sum = output_staff['weights_sum']
                 elif self.model == 'StereoNetNewSDFRender':
-                    output_staff = self.net(left_input, right_input, intrinsic_K, run_sdf=True)
+                    output_staff = self.net(left_input, right_input, intrinsic_K, x_offset, y_offset, run_sdf=True)
                     pyramid_disp = output_staff["multi_scale"]
                 elif self.model == "PAM":
                     output,attn_list,att_cycle,valid_mask = self.net(left_input,right_input,192)

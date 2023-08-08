@@ -90,11 +90,11 @@ class DisparityTrainer(object):
         if self.dataset =='KITTI':
             train_transform_list = [kitti_transform.RandomCrop(320, 960),
                                     kitti_transform.ToTensor(),
-                                    kitti_transform.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD)
+                                    # kitti_transform.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD)
                             ]
             train_transform = kitti_transform.Compose(train_transform_list)
             val_transform_list = [kitti_transform.ToTensor(),
-                                kitti_transform.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD)
+                               #  kitti_transform.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD)
                                 ]
 
             val_transform = kitti_transform.Compose(val_transform_list)

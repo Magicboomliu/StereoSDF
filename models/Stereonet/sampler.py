@@ -38,7 +38,7 @@ class BackprojectDepth:
         # inv_K = inv_K.repeat(self.batch_size, 1, 1)  # (B, 4, 4)
 
         cam_points = torch.matmul(inv_K[:, :3, :3], self.pix_coords)  # (B, 3, HW)
-        
+
         min_depth, max_depth = depth_range
         D_planes = torch.linspace(min_depth, max_depth, self.num_depths).to(device=cam_points.device)  # (D, )
         # random
@@ -182,7 +182,6 @@ class NeuSSampler(nn.Module):
 #        left_img_gt = left_img_gt[..., select_inds]  # (B, 3, N)
 #
         pix_coords_color, valid_mask_color = self.project_color.forward(cam_points, self.color_K, self.transform_LtoL)  # (B, D, H, W, 2), (B, D, H, W)
-        import pdb; pdb.set_trace()
         pix_coords_color, valid_mask_color = select_data(pix_coords_color, valid_mask_color, select_inds)  # (B, D, N, 2), (B, D, N)
         pix_coords_color = pix_coords_color.cuda()
         valid_mask_color = valid_mask_color.cuda()
@@ -228,7 +227,6 @@ class NeuSSampler(nn.Module):
 
         # render
         left_img_render, _ = self.render(sdf_grid, sampled_color_grid)
-        print(weight.max())
         return {
             'left_ray_render': left_img_render,
             'left_ray_gt': left_img_gt,

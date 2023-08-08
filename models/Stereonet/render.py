@@ -220,7 +220,7 @@ def disp_warp(right, disparity):
 
 
 class NeuSRenderer(nn.Module):
-    def __init__(self, init_val=0.3):
+    def __init__(self, init_val=0.01):
         super(NeuSRenderer, self).__init__()
         self.register_parameter('variance', nn.Parameter(torch.tensor(init_val)))
 
@@ -243,9 +243,9 @@ class NeuSRenderer(nn.Module):
         next_cdf = torch.sigmoid(next_sdf * inv_s)  # (512 * (D-1), 1)
         prev_cdf = torch.sigmoid(prev_sdf * inv_s)  # (512 * (D-1), 1)
 
-        p = prev_cdf - next_cdf  # equation 13 分子
-        c = prev_cdf  # equation 13 分母
-        alpha = ((p + 1e-5) / (c + 1e-5)).reshape(batch_size, n_samples - 1).clip(0.0, 1.0)  # equation 13, (512, D-1)
+        p_fenzi = prev_cdf - next_cdf  # equation 13 分子
+        cc = prev_cdf  # equation 13 分母
+        alpha = ((p_fenzi + 1e-5) / (cc + 1e-5)).reshape(batch_size, n_samples - 1).clip(0.0, 1.0)  # equation 13, (512, D-1)
 
         weights = alpha * torch.cumprod(torch.cat([torch.ones([batch_size, 1]).to(alpha), 1. - alpha + 1e-7], -1), -1)[:, :-1]  # (512, D-1)
         weights_sum = weights.sum(dim=-1, keepdim=True)  # (512, 1)
@@ -254,12 +254,12 @@ class NeuSRenderer(nn.Module):
         # weights: (512, D-1)
         color = (color_batch[:, :-1, :] * weights[:, :, None]).sum(dim=1)  # (512, 3)
         # depth = (hypo_depths[None, :-1, None] * weights[:, :, None]).sum(dim=1)  # (512, 1)
-
         # print('hypo depth')
         # print(hypo_depths)
         # print('weights')
         # print(weights[0])
         # print('\n')
+        # import pdb; pdb.set_trace()
 
         return color, weights, weights_sum
 

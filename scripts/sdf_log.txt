@@ -1,0 +1,3 @@
+Use Deformable Conv ? : False
+Number of model parameters: 604511
+load Adam as optimizer

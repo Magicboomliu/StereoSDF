@@ -86,8 +86,8 @@ class Project3D:
         pix_coords = cam_points[:, :2, :] / (cam_points[:, 2, :].unsqueeze(1) + self.eps)
         pix_coords = pix_coords.view(self.batch_size, 2, self.num_depths, self.source_height, self.source_width)  # (B, 2, D, H, W)
         pix_coords = pix_coords.permute(0, 2, 3, 4, 1)  # (B, D, H, W, 2)
-        pix_coords[..., 0] = (pix_coords[..., 0] + self.x_offset[:, None, None, None].cpu()) / self.width - 1
-        pix_coords[..., 1] = (pix_coords[..., 1] + self.y_offset[:, None, None, None].cpu()) / self.height - 1
+        pix_coords[..., 0] = (pix_coords[..., 0]) / (self.width - 1)
+        pix_coords[..., 1] = (pix_coords[..., 1]) / (self.height - 1)
         pix_coords = (pix_coords - 0.5) * 2  # (B, D, H, W, 2)
 
         valid_mask = pix_coords.abs().max(dim=-1)[0] <= 1  # (B, D, H, W)
@@ -182,14 +182,14 @@ class NeuSSampler(nn.Module):
 #        left_img_gt = left_img_gt[..., select_inds]  # (B, 3, N)
 #
         pix_coords_color, valid_mask_color = self.project_color.forward(cam_points, self.color_K, self.transform_LtoL)  # (B, D, H, W, 2), (B, D, H, W)
+        import pdb; pdb.set_trace()
         pix_coords_color, valid_mask_color = select_data(pix_coords_color, valid_mask_color, select_inds)  # (B, D, N, 2), (B, D, N)
         pix_coords_color = pix_coords_color.cuda()
         valid_mask_color = valid_mask_color.cuda()
         weight = torch.sum(valid_mask_color, dim=1) / self.num_depths
         left_img_gt = F.grid_sample(left_img, pix_coords_color, mode='bilinear', padding_mode='zeros', align_corners=True)  # (B, 3, D, N)
         left_img_gt = left_img_gt[:, :, 0]
-        print('weight for color gt', weight)
-        import pdb; pdb.set_trace()
+
         # get color for rendering
         pix_coords_color, valid_mask_color = self.project_color.forward(cam_points, self.color_K, self.transform_LtoR)  # (B, D, H, W, 2), (B, D, H, W)
         pix_coords_color, valid_mask_color = select_data(pix_coords_color, valid_mask_color, select_inds)  # (B, D, N, 2), (B, D, N)

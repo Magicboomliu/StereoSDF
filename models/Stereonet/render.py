@@ -302,6 +302,27 @@ class NeuSRenderer(nn.Module):
 
         return color, weights_sum
 
+    @torch.no_grad()
+    def forward_whole_image(self, sdf_grid, color_grid):
+        """
+        sdf_grid: (B, D, H, W)
+        color_grid: (B, 3, D, H, W)
+        """
+        B, D, H, W = sdf_grid.shape
+
+        sdf_grid = sdf_grid.permute(0, 2, 3, 1)
+        sdf_grid = sdf_grid.flatten(start_dim=0, end_dim=2)  # (B*H*W, D)
+
+        color_grid = color_grid.permute(0, 3, 4, 2, 1)
+        color_grid = color_grid.flatten(start_dim=0, end_dim=2)  # (B*H*W, D, 3)
+
+        # color, weights, weights_sum = self.render_core(sdf_grid, color_grid)
+        color, weights, weights_sum = self.batchify(sdf_grid, color_grid)
+        color = color.view(B, H, W, 3).permute(0, 3, 1, 2)  # (B, 3, H, W)
+        weights_sum = weights_sum.view(B, H, W, 1).permute(0, 3, 1, 2)  # (B, 1, H, W)
+
+        return color, weights_sum
+
 
 class VolSDFRenderer(object):
     def __init__(self, image_size, disp_range):

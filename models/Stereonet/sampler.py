@@ -171,6 +171,41 @@ class NeuSSampler(nn.Module):
 
         return sdf_grid[..., 0], gradient_list
 
+    def batchify_whole_image(self, sampled_left_feat, sampled_right_feat, sampled_left_cv, xyz, chunk=1024*32):
+        """
+        (B, F, D, H, W)
+        (B, F, D, H, W)
+        (B, Cd, D, H, W)
+        (B, 3, D, H, W)
+        """
+        sdf_list = []
+        gradient_list = []
+
+        sampled_left_feat = sampled_left_feat.permute(0, 2, 3, 4, 1).flatten(start_dim=0, end_dim=3)
+        sampled_right_feat = sampled_right_feat.permute(0, 2, 3, 4, 1).flatten(start_dim=0, end_dim=3)
+        sampled_left_cv = sampled_left_cv.permute(0, 2, 3, 4, 1).flatten(start_dim=0, end_dim=3)
+        xyz = xyz.permute(0, 2, 3, 4, 1).flatten(start_dim=0, end_dim=3)
+
+        for i in range(0, sampled_left_feat.shape[0], chunk):
+            sdf = self.sdf_mlp(sampled_left_feat[i:i+chunk],
+                               sampled_right_feat[i:i+chunk],
+                               sampled_left_cv[i:i+chunk],
+                               xyz[i:i+chunk])
+            gradients = self.sdf_mlp.gradient(sampled_left_feat[i:i+chunk],
+                               sampled_right_feat[i:i+chunk],
+                               sampled_left_cv[i:i+chunk],
+                               xyz[i:i+chunk])
+
+            sdf_list.append(sdf)
+            gradient_list.append(gradients)
+
+        sdf_list = torch.concat(sdf_list, dim=0)
+        sdf_grid = sdf_list.view(self.batch_size, self.num_depths, self.height, self.width, 1)
+        gradient_list = torch.concat(gradient_list, dim=0)
+        gradient_list = gradient_list.view(self.batch_size, self.num_depths, self.height, self.width, 1, 3)
+
+        return sdf_grid[..., 0], gradient_list
+
     def forward(self, left_feat, right_feat, left_cv_feat, left_img, right_img):
         cam_points, D_planes = self.backproject.forward(self.depth_range, self.inv_K)  # ((B, 4, DHW)), (D,)
 
@@ -234,6 +269,39 @@ class NeuSSampler(nn.Module):
             'sdf_gradient': gradient_list
         }
 
+    @torch.no_grad
+    def render_whole_image(self, left_feat, right_feat, left_cv_feat, left_img, right_img):
+        cam_points, D_planes = self.backproject.forward(self.depth_range, self.inv_K)  # ((B, 4, DHW)), (D,)
+        pix_coords_color, valid_mask_color = self.project_color.forward(cam_points, self.color_K, self.transform_LtoL)  # (B, D, H, W, 2), (B, D, H, W)
+        left_img_gt = F.grid_sample(left_img, pix_coords_color[:, 0, ...], mode='bilinear', padding_mode='zeros', align_corners=True)  # (B, 3, H, W)
+
+        # get color for rendering
+        pix_coords_color, valid_mask_color = self.project_color.forward(cam_points, self.color_K, self.transform_LtoR)  # (B, D, H, W, 2), (B, D, H, W)
+        sampled_color_grid = grid_sample_helper(right_img, pix_coords_color)  # (B, 3, D, H, W)
+
+        # get sdf feature (left feature)
+        pix_coords_left_feat, valid_mask_left_feat = self.project_feat.forward(cam_points, self.feat_K, self.transform_LtoL)  # (B, D, H, W, 2), (B, D, H, W)
+        sampled_left_feat = grid_sample_helper(left_feat, pix_coords_left_feat)  # (B, F, D, H, W)
+
+        # get sdf feature (right feature)
+        pix_coords_right_feat, valid_mask_right_feat = self.project_feat.forward(cam_points, self.feat_K, self.transform_LtoR)  # (B, D, H, W, 2), (B, D, H, W)
+        sampled_right_feat = grid_sample_helper(right_feat, pix_coords_right_feat)  # (B, F, D, H, W)
+
+        # get sdf feature (left volume)
+        sampled_left_cv = grid_sample_helper(left_cv_feat, pix_coords_left_feat)  # (B, Cd, D, H, W)
+
+        # get sdf feature (xyz)
+        xyz = cam_points[:, :3, ...].view(self.batch_size, 3, self.num_depths, self.height, self.width)  # (B, 3, D, H, W)
+
+        sdf_grid, gradient_list = self.batchify_whole_image(sampled_left_feat, sampled_right_feat, sampled_left_cv, xyz)
+
+        left_img_render, _ = self.render.forward_whole_image(sdf_grid, sampled_color_grid)
+
+        return {
+            'left_ray_render': left_img_render,
+            'left_ray_gt': left_img_gt,
+            'sdf_gradient': gradient_list
+        }
 
 def select_data(pix_coords, valid_mask, select_inds):
     """
@@ -247,6 +315,21 @@ def select_data(pix_coords, valid_mask, select_inds):
     valid_mask = valid_mask[..., select_inds]  # (B, D, N)
 
     return pix_coords, valid_mask
+
+
+def grid_sample_helper(image, sample_points):
+    """
+    image: (B, 3, H, W)
+    sample_points: (B, D, H, W, 2)
+    """
+    sampled_color_grid_list = []
+    for i in range(sample_points.shape[1]):
+        sampled_color_grid = F.grid_sample(image, sample_points[:, i], mode='bilinear', padding_mode='zeros', align_corners=True)
+        sampled_color_grid_list.append(sampled_color_grid)
+
+    sampled_color_grid_list = torch.stack(sampled_color_grid_list, dim=2)
+
+    return sampled_color_grid_list
 
 
 def scale_K(K, scale=1):

@@ -1,5 +1,4 @@
-# StereoSDF
-Using SDF for unsupervised stereo matching  
+# Diffusion Stage2
 
 
 To Run the code:

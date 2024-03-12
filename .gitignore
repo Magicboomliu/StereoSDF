@@ -6,3 +6,23 @@ wandb/*
 logs/*
 visualization/output/*
 # visualization/test_data/*
+*.png
+*.jpg
+*.pth
+*.pt
+*.safetensors
+*.png
+*.jpg
+*.jepg
+*.pyc
+*.cpy
+*.cpython
+__pycache__
+*.npy
+*.npz
+outputs
+*.json
+logs
+*.zip
+*.tar
+

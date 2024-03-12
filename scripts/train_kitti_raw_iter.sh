@@ -1,18 +1,16 @@
 TRAIN_KITTI(){
-pretrain_name=PAMSDF
+pretrain_name=PAM
 cd ..
 mkdir logs
 loss=config/loss_config_disp.json
 outf_model=models_saved/$pretrain_name
 logf=logs/$pretrain_name
-# datapath=/data/public_dataset/KITTI_Raw_Data
-datapath=/hdd/zsy_data/kitti_data
+datapath=/media/zliu/data12/dataset/KITTI/KITTI_Raw/
 datathread=4
-lr=2e-4
+lr=1e-4
 devices=0
 dataset=KITTI
-trainlist=filenames/kitti_raw_complete.txt
-# trainlist=filenames/KITTI_2015_train.txt    
+trainlist=filenames/kitti_raw_complete.txt 
 vallist=filenames/KITTI_2015_train.txt
 startR=0
 startE=0
@@ -41,8 +39,7 @@ CUDA_VISIBLE_DEVICES=0 python3 -W ignore train_iter.py --cuda --loss $loss --lr 
                --initial_pretrain $initial_pretrain \
                --sdf_type $sdf_type \
                --summary_freq $summary_freq \
-               --sdf_weight $sdf_weight \
-               --load_wandb
+               --sdf_weight $sdf_weight 
 }
 
 TRAIN_KITTI

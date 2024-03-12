@@ -10,13 +10,10 @@ from utils.AverageMeter import AverageMeter
 from utils.common import logger, check_path, write_pfm,count_parameters
 
 from models.Stereonet.stereonet import StereoNet
-from models.Stereonet.stereonet_sdf import StereoNetSDF
-from models.Stereonet.stereonet_sdf_render import StereoNetSDFRender
-from models.PAMStereo.PASMnet import PASMnet
-from models.PAMStereo.PASMNet_SDF import PASMnetSDF
-from models.PAMStereo.PASMNet_SDF_MS2 import PASMnetSDFMultiSclae
-from dataloader.kitti_loader import StereoDataset
 
+from models.PAMStereo.PASMnet import PASMnet
+from dataloader.kitti_loader import StereoDataset
+import json
 from dataloader import kitti_transform
 
 # metric
@@ -28,8 +25,8 @@ import os
 from torch.autograd import Variable
 
 from losses.unsupervised_loss import loss_disp_unsupervised,MultiScaleLoss,Eki_Loss,Eki_Loss_Local
-from losses.pam_loss import PAMStereoLoss,PAMStereoLossMultiScale
-
+from losses.pam_loss import PAMStereoLoss
+from tqdm import tqdm
 
 # IMAGENET NORMALIZATION
 IMAGENET_MEAN = [0.485, 0.456, 0.406]
@@ -60,6 +57,7 @@ class DisparityTrainer(object):
         self.weight_decay = kwargs['opt'].weight_decay
         self.val_freq = kwargs['opt'].val_freq
         self.datathread = kwargs['opt'].datathread
+        self.outmodel_path = kwargs['opt'].outf
     
         self.trainlist = trainlist
         self.vallist = vallist
@@ -76,6 +74,7 @@ class DisparityTrainer(object):
         self.d1_error = D1_metric
         self.model = model
         self.wandb = wandb
+        
         #assert self.wandb is not None
         self.initialize()
 
@@ -120,16 +119,8 @@ class DisparityTrainer(object):
         # Build the Network architecture according to the model name
         if self.model == 'StereoNet':
             self.net = StereoNet()
-        elif self.model=='StereoNetSDF':
-            self.net = StereoNetSDF(sdf_type=self.sdf_type)
-        elif self.model == 'StereoNetSDFRender':
-            self.net = StereoNetSDFRender(sdf_type=self.sdf_type, use_sdf_render=True)
         elif self.model == "PAM":
             self.net = PASMnet()
-        elif self.model =="PAMSDF":
-            self.net = PASMnetSDF(sdf_type='MLP',max_disp=192)
-        elif self.model=='PAMSDF_MultiScale':
-            self.net = PASMnetSDFMultiSclae(sdf_type='MLP',max_disp=192,radius=5,refinement_type='softmax_cost_aggregation')
         else:
             raise NotImplementedError
         
@@ -201,13 +192,11 @@ class DisparityTrainer(object):
         self._build_optimizer()
 
     def launch_training(self):
-        
+    
         # Data Summary
         batch_time = AverageMeter()
         data_time = AverageMeter()    
         losses = AverageMeter()
-        eki_loss_meter = AverageMeter()
-        render_loss_meter = AverageMeter()
 
         # non-detection
         torch.autograd.set_detect_anomaly(True)
@@ -217,36 +206,30 @@ class DisparityTrainer(object):
         end = time.time()
         sdf_loss = None
 
+        current_epoch = 0
         # load trainer
         total_steps = 0
+        
+        final_epoch = self.num_steps//len(self.train_loader) +1
         while total_steps < self.num_steps:
-            for i_batch, sample_batched in enumerate(self.train_loader):
+            
+            current_epoch = current_epoch +1
+            for sample_batched in tqdm(self.train_loader):
                 left_input = torch.autograd.Variable(sample_batched['img_left'].cuda(), requires_grad=False)
                 right_input = torch.autograd.Variable(sample_batched['img_right'].cuda(), requires_grad=False)
                 
                 data_time.update(time.time() - end)
                 self.optimizer.zero_grad()
                 
+                # val_EPE = self.validate(total_steps=total_steps)
+                
+                    
                 if self.model =="StereoNet":
                     pyramid_disp = self.net(left_input,right_input)["multi_scale"]
                     output = pyramid_disp[-1]
-                elif self.model=="StereoNetSDF":
-                    output_staff = self.net(left_input,right_input)
-                    pyramid_disp = output_staff["multi_scale"]
-                    est_sdf = output_staff['sdf']
-                elif self.model == 'StereoNetSDFRender':
-                    output_staff = self.net(left_input,right_input)
-                    pyramid_disp = output_staff["multi_scale"]
-                    est_sdf = output_staff['sdf']
-                    rendered_left = output_staff['rendered_left']
-                    weights_sum = output_staff['weights_sum']
+
                 elif self.model == "PAM":
                     output,attn_list,att_cycle,valid_mask = self.net(left_input,right_input,192)
-                elif self.model =="PAMSDF":
-                    output,attn_list,att_cycle,valid_mask,est_sdf= self.net(left_input,right_input,192)
-                elif self.model == 'PAMSDF_MultiScale':
-                    output_pyramid,attn_list,att_cycle,valid_mask,est_list,sample_locals = self.net(left_input,right_input,192)
-                    output = output_pyramid[-1]
 
                 
                 if self.model=='StereoNet':
@@ -254,55 +237,10 @@ class DisparityTrainer(object):
                     photo_loss = MultiScaleLoss(weights=[0.8,1.0,1.0],disp_pyramid=pyramid_disp,
                                     left_img=left_input,right_img=right_input)
                     loss = photo_loss
-                
-                elif self.model=='StereoNetSDF':
-                    photo_loss = MultiScaleLoss(weights=[0.8,1.0,1.0],disp_pyramid=pyramid_disp,
-                                    left_img=left_input,right_img=right_input)
-                    sdf_loss = Eki_Loss(est_sdf=est_sdf)
-                    loss = photo_loss + sdf_loss * self.sdf_weight 
-                    eki_loss_meter.update(sdf_loss.data.item(),left_input.size(0))
-                elif self.model == 'StereoNetSDFRender':
-                    photo_loss = MultiScaleLoss(weights=[0.8,1.0,1.0],disp_pyramid=pyramid_disp,
-                                    left_img=left_input,right_img=right_input)
-                    sdf_loss = Eki_Loss(est_sdf=est_sdf)
-                    left_18 = F.interpolate(left_input, scale_factor=1/8, mode='bilinear', align_corners=False)
-                    sdf_render_loss = F.l1_loss(left_18, rendered_left, size_average=True, reduction='mean')
-                    
-                    # FIXME : beta 
-                    # beta = 0.01
-                    loss = photo_loss + sdf_loss * self.sdf_weight + sdf_render_loss * 0.1
-                    
-                    render_loss_meter.update(sdf_render_loss.data.item(), left_input.size(0))
-                    eki_loss_meter.update(sdf_loss.data.item(),left_input.size(0))
                 elif self.model =='PAM':
                     loss, loss_P, loss_S, loss_PAM = PAMStereoLoss(left_input,right_input,disp=output,att=attn_list,
                                                                 att_cycle=att_cycle,valid_mask=valid_mask,disp_gt=None)
                     photo_loss = loss
-                    
-                elif self.model == "PAMSDF":
-                    loss, loss_P, loss_S, loss_PAM = PAMStereoLoss(left_input,right_input,disp=output,att=attn_list,
-                                                                att_cycle=att_cycle,valid_mask=valid_mask,disp_gt=None)
-                    sdf_loss = Eki_Loss(est_sdf=est_sdf)
-                    photo_loss = loss
-                    # FIXME : beta 
-                    # beta = 0.01
-                    loss = loss + sdf_loss * self.sdf_weight
-                    eki_loss_meter.update(sdf_loss.data.item(),left_input.size(0))
-                
-                elif self.model=="PAMSDF_MultiScale":
-                    loss, loss_P, loss_S, loss_PAM = PAMStereoLossMultiScale(left_input,right_input,
-                                                                             disp_pyramid=output_pyramid,att=attn_list,
-                                                                att_cycle=att_cycle,valid_mask=valid_mask,disp_gt=None)
-                    sdf_loss_14 = Eki_Loss(est_sdf=est_list[0])
-                    sdf_loss_12_local = Eki_Loss_Local(est_sdf=est_list[1],local_sample_points=sample_locals[0])
-                    sdf_loss_l1_local = Eki_Loss_Local(est_sdf=est_list[2],local_sample_points=sample_locals[1])
-                    
-                    sdf_loss = sdf_loss_14 + sdf_loss_12_local + sdf_loss_l1_local
-                    photo_loss = loss
-                    # FIXME : beta 
-                    # beta = 0.01
-                    loss = loss + sdf_loss * self.sdf_weight
-                    eki_loss_meter.update(sdf_loss.data.item(),left_input.size(0))
                     
                     
                 else:
@@ -323,28 +261,25 @@ class DisparityTrainer(object):
                 batch_time.update(time.time() - end)
                 end = time.time()                
                 
-                # update training logs
-                if self.wandb is not None and total_steps % self.summary_freq == 0:
+                if total_steps % self.summary_freq == 0:
+                    logger.info('Epoch {}/{}:'.format(current_epoch,final_epoch))
                     logger.info('photometric loss is %.3f' % (photo_loss.data.cpu().numpy()))
-                    self.wandb.log({'photometric_loss': photo_loss.data.cpu().numpy()})
-                    if sdf_loss is not None:
-                        self.wandb.log({'eikonal_loss': (sdf_loss * self.sdf_weight).data.cpu().numpy()})
-                    # self.wandb.log({'learning_rate': cur_lr})
-                    self.wandb.log({'lr': self.optimizer.state_dict()['param_groups'][0]['lr']})
 
                 # launch evaluation
                 if total_steps % self.val_freq == 0:
-                    val_EPE = self.validate()
+                    val_EPE = self.validate(total_steps=total_steps)
+                    saved_model_path = os.path.join(self.outmodel_path,'step_%d_%.3f.pth' % (total_steps, val_EPE))
+                    
                     torch.save({
                         'step': total_steps,
                         'state_dict': self.get_model(),
                         'val_epe': val_EPE,
-                    }, 'step_%d_%.3f.pth' % (total_steps, val_EPE))
+                    }, saved_model_path)
                     self.net.train()
         
         return None
 
-    def validate(self):
+    def validate(self,total_steps):
         
         batch_time = AverageMeter()
         flow2_EPEs = AverageMeter()
@@ -380,10 +315,10 @@ class DisparityTrainer(object):
                 
                 start_time = time.perf_counter()
                 # Get the predicted disparity
-                if self.model in ["StereoNet","StereoNetSDF","StereoNetSDFRender"]:
+                if self.model in ["StereoNet"]:
                     output = self.net(left_input_pad,right_input_pad)['disp']
 
-                elif self.model in ["PAM","PAMSDF","PAMSDF_MultiScale"]:
+                elif self.model in ["PAM"]:
                     output = self.net(left_input_pad,right_input_pad)
 
                 output = output[:,:,h_pad:,w_pad:]
@@ -422,10 +357,18 @@ class DisparityTrainer(object):
         
         logger.info(' * avg inference time {:.3f}'.format(inference_time / img_nums))
 
-        if self.wandb is not None:
-            self.wandb.log({'val_epe': flow2_EPEs.avg})
-            self.wandb.log({'val_p1': P1_errors.avg})
-            self.wandb.log({'val_d1': D1_errors.avg})
+        results_dict = dict()
+        results_dict['epe'] = flow2_EPEs.avg
+        results_dict['p1'] = P1_errors.avg
+        results_dict['d1'] = D1_errors.avg
+    
+        os.makedirs(os.path.join(self.outmodel_path,'Performance'),exist_ok=True)
+        saved_json = os.path.join(os.path.join(self.outmodel_path,'Performance'),'iter_{}.json'.format(total_steps))
+        # Writing JSON data
+        with open(saved_json, 'w') as file:
+            json.dump(results_dict, file, indent=4)
+        
+        
 
         return flow2_EPEs.avg
         

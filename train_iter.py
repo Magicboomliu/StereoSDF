@@ -10,7 +10,7 @@ import torch.backends.cudnn as cudnn
 from utils.common import *
 from trainfiles.trainer_stereo_iter import DisparityTrainer
 
-import wandb
+# import wandb
 
 from torch.utils.tensorboard import SummaryWriter
 cudnn.benchmark = True
@@ -32,33 +32,33 @@ def main(opt):
     epoches = loss_json["epoches"]
     logger.info(loss_weights)
     
-    use_wandb = opt.load_wandb
+    # use_wandb = opt.load_wandb
     
-    if use_wandb==True:
-        import wandb
-        # init wandb
-        group_name = 'model_%s_sdf_%s_cos_lr' % (opt.model, opt.sdf_type)
-        name = 'sdf_weight_%.2f_lr_%f_optim_%s' % (opt.sdf_weight, opt.lr, opt.optimizer)
-        wandb.init(
-            project = 'stereo_sdf',
-            group = group_name,
-            name = name,
-            config = {
-                'learning_rate' : opt.lr,
-                'training_epochs' : train_round * epoches,
-                'sdf_weight' : opt.sdf_weight,
-                'model' : opt.model,
-                'entity': 'sterer-sdf'
-            }
-        )
-    else:
-        wandb = None
+    # if use_wandb==True:
+    #     import wandb
+    #     # init wandb
+    #     group_name = 'model_%s_sdf_%s_cos_lr' % (opt.model, opt.sdf_type)
+    #     name = 'sdf_weight_%.2f_lr_%f_optim_%s' % (opt.sdf_weight, opt.lr, opt.optimizer)
+    #     wandb.init(
+    #         project = 'stereo_sdf',
+    #         group = group_name,
+    #         name = name,
+    #         config = {
+    #             'learning_rate' : opt.lr,
+    #             'training_epochs' : train_round * epoches,
+    #             'sdf_weight' : opt.sdf_weight,
+    #             'model' : opt.model,
+    #             'entity': 'sterer-sdf'
+    #         }
+    #     )
+    # else:
+    #     wandb = None
     
     # initialize a trainer
     trainer = DisparityTrainer(opt.lr, opt.devices, 
                                opt.dataset, opt.trainlist, opt.vallist, 
                                opt.datapath, opt.batch_size, opt.maxdisp,opt.use_deform,opt.pretrain,opt.model, 
-                               test_batch=opt.test_batch,initial_pretrain=opt.initial_pretrain, wandb=wandb,opt=opt)
+                               test_batch=opt.test_batch,initial_pretrain=opt.initial_pretrain, wandb=None,opt=opt)
     
     # validate the pretrained model on test data
     best_EPE = -1
@@ -68,7 +68,7 @@ def main(opt):
     
     # load training process
     trainer.launch_training()
-    wandb.finish()
+    # wandb.finish()
     
 
 if __name__ == '__main__':

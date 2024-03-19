@@ -24,8 +24,9 @@ initial_pretrain=none
 sdf_type=MLP
 summary_freq=10
 sdf_weight=0.01
+new_datapath="/media/zliu/data12/dataset/KITTI/NewViews"
 
-CUDA_VISIBLE_DEVICES=0 python3 -W ignore train_iter.py --cuda --loss $loss --lr $lr \
+CUDA_VISIBLE_DEVICES=0 python3 -W ignore train_multi.py --cuda --loss $loss --lr $lr \
                --outf $outf_model --logFile $logf \
                --devices $devices --batch_size $batchSize \
                --dataset $dataset --trainlist $trainlist --vallist $vallist \
@@ -39,7 +40,8 @@ CUDA_VISIBLE_DEVICES=0 python3 -W ignore train_iter.py --cuda --loss $loss --lr 
                --initial_pretrain $initial_pretrain \
                --sdf_type $sdf_type \
                --summary_freq $summary_freq \
-               --sdf_weight $sdf_weight 
+               --sdf_weight $sdf_weight \
+               --new_datapath $new_datapath
 }
 
 TRAIN_KITTI

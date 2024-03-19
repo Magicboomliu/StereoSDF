@@ -12,27 +12,31 @@ from utils.common import logger, check_path, write_pfm,count_parameters
 from models.Stereonet.stereonet import StereoNet
 
 from models.PAMStereo.PASMnet import PASMnet
-from dataloader.kitti_loader import StereoDataset
+
 import json
-from dataloader import kitti_transform
+
+
+
+from dataloader.kitti_loader_multi_view import StereoDataset
+from dataloader import kitti_transforms_new_view
 
 # metric
 from utils.metric import P1_metric,P1_Value,D1_metric,Disparity_EPE_Loss
 from utils.metric import compute_iou,Occlusion_EPE
 
+
 import time
 import os
 from torch.autograd import Variable
 
-from losses.unsupervised_loss import loss_disp_unsupervised,MultiScaleLoss,Eki_Loss,Eki_Loss_Local
+from losses.unsupervised_loss import loss_disp_unsupervised,MultiScaleLoss,Eki_Loss,Eki_Loss_Local,MultiScaleLoss_Baseline
 from losses.pam_loss import PAMStereoLoss
 from tqdm import tqdm
+import matplotlib.pyplot as plt 
 
 # IMAGENET NORMALIZATION
 IMAGENET_MEAN = [0.485, 0.456, 0.406]
 IMAGENET_STD = [0.229, 0.224, 0.225]
-
-import matplotlib.pyplot as plt
 
 
 def Image_DeNormalization(image_tensor):
@@ -42,6 +46,8 @@ def Image_DeNormalization(image_tensor):
     
     image_denorm = image_tensor * image_std + image_mean
     return image_denorm
+
+
 
 class DisparityTrainer(object):
     def __init__(self, lr, devices, dataset, trainlist, vallist, datapath, 
@@ -68,6 +74,7 @@ class DisparityTrainer(object):
         self.val_freq = kwargs['opt'].val_freq
         self.datathread = kwargs['opt'].datathread
         self.outmodel_path = kwargs['opt'].outf
+        self.new_data_path = kwargs['opt'].new_datapath
     
         self.trainlist = trainlist
         self.vallist = vallist
@@ -93,21 +100,25 @@ class DisparityTrainer(object):
     def _prepare_dataset(self):
         # KITTI MIX
         if self.dataset =='KITTI':
-            train_transform_list = [kitti_transform.RandomCrop(320, 960),
-                                    kitti_transform.ToTensor(),
-                                    kitti_transform.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD)
+            train_transform_list = [kitti_transforms_new_view.RandomCrop(320, 960),
+                                    kitti_transforms_new_view.ToTensor(),
+                                    kitti_transforms_new_view.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD)
                             ]
-            train_transform = kitti_transform.Compose(train_transform_list)
-            val_transform_list = [kitti_transform.ToTensor(),
-                                kitti_transform.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD)
+            train_transform = kitti_transforms_new_view.Compose(train_transform_list)
+            val_transform_list = [kitti_transforms_new_view.ToTensor(),
+                                kitti_transforms_new_view.Normalize(mean=IMAGENET_MEAN, std=IMAGENET_STD)
                                 ]
 
-            val_transform = kitti_transform.Compose(val_transform_list)
+            val_transform = kitti_transforms_new_view.Compose(val_transform_list)
             test_dataset = StereoDataset(data_dir=self.datapath,train_datalist=self.trainlist,
                                         test_datalist=self.vallist,
+                                        new_view_dir=self.new_data_path,
+                                        
                                 dataset_name='KITTI_mix',mode='test',transform=val_transform)
         
-            train_dataset = StereoDataset(data_dir=self.datapath,train_datalist=self.trainlist,test_datalist=self.vallist,
+            train_dataset = StereoDataset(data_dir=self.datapath,
+                                          new_view_dir=self.new_data_path,
+                                          train_datalist=self.trainlist,test_datalist=self.vallist,
                                     dataset_name='KITTI_mix',mode='train',transform=train_transform)
             
         self.img_height, self.img_width = train_dataset.get_img_size()
@@ -227,27 +238,42 @@ class DisparityTrainer(object):
             for sample_batched in tqdm(self.train_loader):
                 left_input = torch.autograd.Variable(sample_batched['img_left'].cuda(), requires_grad=False)
                 right_input = torch.autograd.Variable(sample_batched['img_right'].cuda(), requires_grad=False)
+                left_left_input = torch.autograd.Variable(sample_batched['img_left_left'].cuda(), requires_grad=False)
+                right_right_input = torch.autograd.Variable(sample_batched['img_right_right'].cuda(), requires_grad=False)
+                
+                # left_input_denorm = Image_DeNormalization(left_input)
+                # right_input_denorm = Image_DeNormalization(right_input)
+                # left_left_input_denorm = Image_DeNormalization(left_left_input)
+                # right_right_input_denorm = Image_DeNormalization(right_right_input)
+                
+                # left_input_denorm_vis = left_input_denorm[5].permute(1,2,0).cpu().numpy()
+                # right_input_denorm_vis = right_input_denorm[5].permute(1,2,0).cpu().numpy()
+                # left_left_input_denorm_vis = left_left_input_denorm[5].permute(1,2,0).cpu().numpy()
+                # right_right_input_denorm_vis = right_right_input_denorm[5].permute(1,2,0).cpu().numpy()
+                
+                # plt.figure(figsize=(10,7))
+                # plt.subplot(2,2,1)
+                # plt.axis("off")
+                # plt.title("left_left")
+                # plt.imshow(left_left_input_denorm_vis)
+                # plt.subplot(2,2,2)
+                # plt.axis("off")
+                # plt.title("left")
+                # plt.imshow(left_input_denorm_vis)
+                # plt.subplot(2,2,3)
+                # plt.axis("off")
+                # plt.title("right")
+                # plt.imshow(right_input_denorm_vis)
+                # plt.subplot(2,2,4)
+                # plt.axis("off")
+                # plt.title("right_right")
+                # plt.imshow(right_right_input_denorm_vis)
+                # plt.show()
+                
+                # quit()
                 
                 data_time.update(time.time() - end)
                 self.optimizer.zero_grad()
-                
-                left_input_denorm = Image_DeNormalization(left_input)
-                right_input_denorm = Image_DeNormalization(right_input)
-
-                left_input_denorm_vis = left_input_denorm[5].permute(1,2,0).cpu().numpy()
-                right_input_denorm_vis = right_input_denorm[5].permute(1,2,0).cpu().numpy()
-                
-                plt.figure(figsize=(10,7))
-                plt.subplot(1,2,1)
-                plt.axis("off")
-                plt.title("left_left")
-                plt.imshow(left_input_denorm_vis)
-                plt.subplot(1,2,2)
-                plt.axis("off")
-                plt.title("left")
-                plt.imshow(right_input_denorm_vis)
-                plt.show()
-                quit()
                 
                 # val_EPE = self.validate(total_steps=total_steps)
                 
@@ -262,8 +288,12 @@ class DisparityTrainer(object):
                 
                 if self.model=='StereoNet':
                     # Loss Here
-                    photo_loss = MultiScaleLoss(weights=[0.8,1.0,1.0],disp_pyramid=pyramid_disp,
-                                    left_img=left_input,right_img=right_input)
+                    photo_loss = MultiScaleLoss_Baseline(weights=[0.8,1.0,1.0],
+                                                         disp_pyramid=pyramid_disp,
+                                                         left_img=left_input,
+                                                         right_img=right_input,
+                                                         left_left=left_left_input,
+                                                         right_right=right_right_input)
                     loss = photo_loss
                 elif self.model =='PAM':
                     loss, loss_P, loss_S, loss_PAM = PAMStereoLoss(left_input,right_input,disp=output,att=attn_list,

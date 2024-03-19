@@ -24,6 +24,8 @@ def Eki_Loss_Local(est_sdf,local_sample_points):
 def L1Loss(input, target):
     return (input - target).abs().mean()
 
+def L1Loss_without_mean(input, target):
+    return (input - target).abs()
 
 def loss_disp_unsupervised(img_left, img_right, disp, valid_mask=None, mask=None):
     b, _, h, w = img_left.shape
@@ -36,6 +38,54 @@ def loss_disp_unsupervised(img_left, img_right, disp, valid_mask=None, mask=None
     loss = 0.85 * L1Loss(image_warped * valid_mask, img_left * valid_mask) + \
            0.15 * (valid_mask * (1 - ssim(img_left, image_warped)) / 2).mean()
     return loss
+
+def loss_disp_unsupervised_multi(img_left, 
+                                 img_right, 
+                                 img_left_left,
+                                 img_right_right,
+                                 disp, valid_mask=None, mask=None):
+    b, _, h, w = img_left.shape
+    image_warped_left = warp_disp(img_right, -disp)
+    image_warped_left2 = warp_disp(img_right_right,-2*disp)
+    image_warped_left3 = warp_disp(img_left_left,disp)
+    valid_mask = torch.ones(b, 1, h, w).to(img_left.device) if valid_mask is None else valid_mask
+    if mask is not None:
+        valid_mask = valid_mask * mask
+        
+        
+    loss_0 = 0.85 * L1Loss_without_mean(image_warped_left*valid_mask,img_left * valid_mask) + \
+                   0.15 * (valid_mask * (1 - ssim(img_left, image_warped_left)) / 2)
+                   
+    loss_1 = 0.85 * L1Loss_without_mean(image_warped_left2*valid_mask,img_left * valid_mask) + \
+                   0.15 * (valid_mask * (1 - ssim(img_left, image_warped_left2)) / 2)
+                   
+    loss_2 = 0.85 * L1Loss_without_mean(image_warped_left3*valid_mask,img_left * valid_mask) + \
+                   0.15 * (valid_mask * (1 - ssim(img_left, image_warped_left3)) / 2)
+                       
+    loss_0_abs = torch.sum(loss_0,dim=1,keepdim=True)
+    loss_1_abs = torch.sum(loss_1,dim=1,keepdim=True)
+    loss_2_abs = torch.sum(loss_2,dim=1,keepdim=True)
+
+
+    min_tensor_idx = torch.argmin(torch.cat([loss_0_abs,loss_1_abs,loss_2_abs], dim=1), dim=1,keepdim=True) #[B,1,H,W]
+    
+    mask_0 = torch.where(min_tensor_idx == 0, torch.tensor(True), torch.tensor(False))
+    mask_1 = torch.where(min_tensor_idx == 1, torch.tensor(True), torch.tensor(False))
+    mask_2 = torch.where(min_tensor_idx == 2, torch.tensor(True), torch.tensor(False))
+    
+    mask_0= mask_0.float()
+    mask_1 = mask_1.float()
+    mask_2 = mask_2.float()
+    
+    mask = mask_0 + mask_1 + mask_2
+    loss = loss_0 * mask_0 + loss_1 * mask_1  + loss_2 * mask_2
+    
+    loss = loss.mean()
+                   
+    return loss
+
+
+
 
 
 def loss_disp_smoothness(disp, img):
@@ -66,6 +116,25 @@ def MultiScaleLoss(weights,disp_pyramid,left_img,right_img):
     
     return total_loss
 
+
+def MultiScaleLoss_Baseline(weights,disp_pyramid,left_img,right_img,
+                            left_left,right_right):
+    
+    total_loss = 0
+    
+    for idx, disp in enumerate(disp_pyramid):
+        supervised_loss = loss_disp_unsupervised_multi(
+            img_left=left_img,
+            img_right=right_img,
+            disp=disp,
+            img_left_left=left_left,
+            img_right_right=right_right)
+        smooth_loss = loss_disp_smoothness(disp,left_img)
+        cur_loss = supervised_loss *1.0 + smooth_loss*0.1
+        
+        total_loss+=cur_loss*weights[idx]
+    
+    return total_loss
 
 
 

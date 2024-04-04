@@ -34,7 +34,6 @@ IMAGENET_STD = [0.229, 0.224, 0.225]
 
 import matplotlib.pyplot as plt
 
-
 def Image_DeNormalization(image_tensor):
     
     image_mean = torch.from_numpy(np.array(IMAGENET_MEAN)).unsqueeze(-1).unsqueeze(-1).unsqueeze(0).type_as(image_tensor)

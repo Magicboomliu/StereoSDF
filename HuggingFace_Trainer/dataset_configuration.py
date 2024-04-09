@@ -33,7 +33,8 @@ def prepare_dataset(source_datapath,
                     trainlist,
                     vallist,
                     batch_size,
-                    datathread):
+                    datathread,
+                    visible_list=None):
     
     train_transform_list = [kitti_transforms_bmvc.RandomCrop(320, 960),
                             kitti_transforms_bmvc.ToTensor(),
@@ -56,7 +57,7 @@ def prepare_dataset(source_datapath,
                                              test_datalist=vallist,
                                              mode='train',
                                              transform=train_transform,
-                                             visible_list=['left','right'])
+                                             visible_list=visible_list)
     
     test_dataset = KITTI_Multi_View_Dataset(source_datapath=source_datapath,
                                              outside_view_datapath=outside_view_datapath,

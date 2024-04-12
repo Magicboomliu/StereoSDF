@@ -7,7 +7,6 @@ sys.path.append("..")
 from losses.metirc import *
 
 
-
 def L1Loss(input, target):
     return (input - target).abs().mean()
 
@@ -25,16 +24,25 @@ def loss_disp_unsupervised(img_left, img_right, disp, valid_mask=None, mask=None
     return loss
 
 
+def change_psnr_to_confidence(psnr,min=15,max=25):
+  confidence = (psnr-min) * 1.0 /(max-min)
+  return confidence
 
 def L1Loss_without_mean(input, target):
     return (input - target).abs()
 
 # left-left and right-right
-def loss_disp_unsupervised_multi(img_left, 
+def loss_disp_unsupervised_multi_conf(img_left, 
                                  img_right, 
                                  img_left_left,
                                  img_right_right,
+                                 conf,
                                  disp, valid_mask=None, mask=None):
+    
+    # conf = change_psnr_to_confidence(conf)
+    conf = conf.unsqueeze(-1).unsqueeze(-1)
+    # print(conf)
+
     b, _, h, w = img_left.shape
     image_warped_left = warp_disp(img_right, -disp)
     image_warped_left2 = warp_disp(img_right_right,-2*disp)
@@ -59,7 +67,6 @@ def loss_disp_unsupervised_multi(img_left,
 
 
     min_tensor_idx = torch.argmin(torch.cat([loss_0_abs,loss_1_abs,loss_2_abs], dim=1), dim=1,keepdim=True) #[B,1,H,W]
-    
     mask_0 = torch.where(min_tensor_idx == 0, torch.tensor(True), torch.tensor(False))
     mask_1 = torch.where(min_tensor_idx == 1, torch.tensor(True), torch.tensor(False))
     mask_2 = torch.where(min_tensor_idx == 2, torch.tensor(True), torch.tensor(False))
@@ -70,20 +77,23 @@ def loss_disp_unsupervised_multi(img_left,
     
     mask = mask_0 + mask_1 + mask_2
     loss = loss_0 * mask_0 + loss_1 * mask_1  + loss_2 * mask_2
-    
-    loss = loss.mean()
-                   
+    loss = loss * conf
+
+    loss = loss.mean()       
     return loss
 
-
-# left-left and right-right and center
-def loss_disp_unsupervised_multi_plus_center(img_left, 
+# Left-left and right-right and center
+def loss_disp_unsupervised_multi_plus_center_conf(img_left, 
                                  img_right, 
                                  img_left_left,
                                  img_right_right,
                                  img_center,
-                                 
+                                 conf,
                                  disp, valid_mask=None, mask=None):
+    
+    # conf = change_psnr_to_confidence(conf)
+    conf = conf.unsqueeze(-1).unsqueeze(-1)
+    
     b, _, h, w = img_left.shape
     image_warped_left = warp_disp(img_right, -disp)
     image_warped_left2 = warp_disp(img_right_right,-2*disp)
@@ -130,19 +140,25 @@ def loss_disp_unsupervised_multi_plus_center(img_left,
     mask = mask_0 + mask_1 + mask_2 + mask_3 
     loss = loss_0 * mask_0 + loss_1 * mask_1  + loss_2 * mask_2 + loss_3 * mask_3
     
+    
+    loss = loss * conf
+    
     loss = loss.mean()
                    
     return loss
 
-
-
-# center images
-def loss_disp_unsupervised_center(img_left, 
+# Center images
+def loss_disp_unsupervised_center_conf(img_left, 
                                  img_right,
                                  img_center,
-                                 disp, 
+                                 disp,
+                                 conf,
                                  valid_mask=None, 
                                  mask=None):
+    
+    # conf = change_psnr_to_confidence(conf)
+    conf = conf.unsqueeze(-1).unsqueeze(-1)
+    
     b, _, h, w = img_left.shape
     image_warped_left = warp_disp(img_right, -disp)
     image_warped_left2 = warp_disp(img_center,-0.5*disp)
@@ -172,9 +188,12 @@ def loss_disp_unsupervised_center(img_left,
     mask = mask_0 + mask_1 
     loss = loss_0 * mask_0 + loss_1 * mask_1 
     
+    loss = loss * conf
+    
     loss = loss.mean()
                    
     return loss
+
 
 
 
@@ -189,8 +208,6 @@ def loss_disp_smoothness(disp, img):
            (weight_x.sum() + weight_y.sum())
 
     return loss
-
-
 
 def loss_pam_photometric(img_left, img_right, att, valid_mask, mask=None):
     weight = [0.2, 0.3, 0.5]
@@ -224,28 +241,22 @@ def loss_pam_photometric(img_left, img_right, att, valid_mask, mask=None):
 
     return loss
 
-
-
 def loss_pam_cycle(att_cycle, valid_mask):
     weight = [0.2, 0.3, 0.5]
     loss = torch.zeros(1).to(att_cycle[0][0].device)
-
     for idx_scale in range(len(att_cycle)):
         b, c, h, w = valid_mask[idx_scale][0].shape
         I = torch.eye(w, w).repeat(b, h, 1, 1).to(att_cycle[0][0].device)
-
         att_left2right2left = att_cycle[idx_scale][0]
         att_right2left2right = att_cycle[idx_scale][1]
         valid_mask_left = valid_mask[idx_scale][0]
         valid_mask_right = valid_mask[idx_scale][1]
-
         loss_scale = L1Loss(att_left2right2left * valid_mask_left.permute(0, 2, 3, 1), I * valid_mask_left.permute(0, 2, 3, 1)) + \
                      L1Loss(att_right2left2right * valid_mask_right.permute(0, 2, 3, 1), I * valid_mask_right.permute(0, 2, 3, 1))
 
         loss = loss + weight[idx_scale] * loss_scale
 
     return loss
-
 
 def loss_pam_smoothness(att):
     weight = [0.2, 0.3, 0.5]
@@ -287,11 +298,13 @@ def gaussian(window_size, sigma):
     gauss = torch.Tensor([exp(-(x - window_size // 2) ** 2 / float(2 * sigma ** 2)) for x in range(window_size)])
     return gauss / gauss.sum()
 
+
 def create_window(window_size, channel):
     _1D_window = gaussian(window_size, 1.5).unsqueeze(1)
     _2D_window = _1D_window.mm(_1D_window.t()).float().unsqueeze(0).unsqueeze(0)
     window = _2D_window.expand(channel, 1, window_size, window_size).contiguous()
     return window
+
 
 def _ssim(img1, img2, window, window_size, channel):
     mu1 = F.conv2d(img1, window, padding=window_size // 2, groups=channel)
@@ -312,6 +325,7 @@ def _ssim(img1, img2, window, window_size, channel):
 
     return ssim_map
 
+
 def ssim(img1, img2, window_size=11):
     _, channel, h, w = img1.size()
     window = create_window(window_size, channel)
@@ -319,6 +333,8 @@ def ssim(img1, img2, window_size=11):
         window = window.cuda(img1.get_device())
     window = window.type_as(img1)
     return _ssim(img1, img2, window, window_size, channel)
+
+
 
 def PAMStereoLossMultiScale(img_left,img_right,disp_pyramid,att,att_cycle,valid_mask,disp_gt):
     disp = disp_pyramid[-1]
@@ -355,6 +371,8 @@ def PAMStereoLossMultiScale(img_left,img_right,disp_pyramid,att,att_cycle,valid_
     
     return loss, total_loss_P, total_loss_S, loss_PAM
 
+
+
 def PAMStereoLoss(img_left,img_right,disp,att,att_cycle,valid_mask,disp_gt):
     
     if disp_gt is not None:
@@ -379,9 +397,12 @@ def PAMStereoLoss(img_left,img_right,disp,att,att_cycle,valid_mask,disp_gt):
     
     return loss, loss_P, loss_S, loss_PAM
 
-def PAMLoss_OutSide(img_left,img_right,disp,
+
+
+def PAMLoss_OutSide_Conf(img_left,img_right,disp,
                     att,att_cycle,valid_mask,disp_gt,
-                    img_left_left, img_right_right
+                    img_left_left, img_right_right,
+                    conf
                     ):
     
     if disp_gt is not None:
@@ -392,8 +413,9 @@ def PAMLoss_OutSide(img_left,img_right,disp,
     
     # loss-p
     loss_P = loss_disp_unsupervised(img_left, img_right, disp, F.interpolate(valid_mask[-1][0], scale_factor=4, mode='nearest'), mask_left)
-    loss_P_plus = loss_disp_unsupervised_multi(img_left=img_left,img_right=img_right,img_left_left=img_left_left,
-                                                img_right_right=img_right_right,disp=disp)
+    loss_P_plus = loss_disp_unsupervised_multi_conf(img_left=img_left,img_right=img_right,img_left_left=img_left_left,
+                                                img_right_right=img_right_right,disp=disp,
+                                                conf=conf)
     
     # loss_P = loss_P + loss_P_plus
     loss_P = loss_P_plus * 2.0
@@ -412,10 +434,13 @@ def PAMLoss_OutSide(img_left,img_right,disp,
     
     return loss, loss_P, loss_S, loss_PAM
 
-def PAMLoss_OutSideCenter(img_left,img_right,disp,
+
+
+def PAMLoss_OutSideCenter_Conf(img_left,img_right,disp,
                     att,att_cycle,valid_mask,disp_gt,
                     img_left_left, img_right_right,
                     img_center,
+                    conf
                     ):
     
     if disp_gt is not None:
@@ -427,8 +452,9 @@ def PAMLoss_OutSideCenter(img_left,img_right,disp,
     # loss-p
     loss_P = loss_disp_unsupervised(img_left, img_right, disp, F.interpolate(valid_mask[-1][0], scale_factor=4, mode='nearest'), mask_left)
     
-    loss_P_plus = loss_disp_unsupervised_multi_plus_center(img_left=img_left,img_right=img_right,img_left_left=img_left_left,
-                                                img_right_right=img_right_right,disp=disp,img_center=img_center)
+    loss_P_plus = loss_disp_unsupervised_multi_plus_center_conf(img_left=img_left,img_right=img_right,img_left_left=img_left_left,
+                                                img_right_right=img_right_right,disp=disp,img_center=img_center,
+                                                conf=conf)
     
     # loss_P_plus = loss_disp_unsupervised_multi(img_left=img_left,img_right=img_right,img_left_left=img_left_left,
     #                                             img_right_right=img_right_right,disp=disp)
@@ -451,9 +477,11 @@ def PAMLoss_OutSideCenter(img_left,img_right,disp,
     return loss, loss_P, loss_S, loss_PAM
 
 
-def PAMLoss_Center(img_left,img_right,disp,
+
+def PAMLoss_Center_Conf(img_left,img_right,disp,
                     att,att_cycle,valid_mask,disp_gt,
-                    img_center
+                    img_center,
+                    conf
                     ):
     
     if disp_gt is not None:
@@ -464,10 +492,11 @@ def PAMLoss_Center(img_left,img_right,disp,
     
     # loss-p
     loss_P = loss_disp_unsupervised(img_left, img_right, disp, F.interpolate(valid_mask[-1][0], scale_factor=4, mode='nearest'), mask_left)
-    loss_P_plus = loss_disp_unsupervised_center(img_left=img_left,
+    loss_P_plus = loss_disp_unsupervised_center_conf(img_left=img_left,
                                                 img_right=img_right,
                                                 img_center=img_center,
-                                                disp=disp)
+                                                disp=disp,
+                                                conf=conf)
     
     # loss_P = loss_P + loss_P_plus
     loss_P = loss_P_plus * 2.0

@@ -6,6 +6,28 @@ import numpy as np
 import re
 from PIL import Image
 import sys
+import torch
+
+def create_edge_mask(tensor, edge_width=200):
+    """
+    Create a mask for the edges of the given tensor.
+    
+    Parameters:
+    - tensor: Input tensor of shape [1, 1, H, W]
+    - edge_width: Width of the edge to be masked
+    
+    Returns:
+    - mask: Output mask of the same shape as tensor, with edges set to 1.0 and the rest to 0.0
+    """
+    _, _, H, W = tensor.shape
+    mask = torch.zeros_like(tensor)  # 创建一个形状相同的全零张量
+    
+    # 将左右两侧各edge_width宽的区域设为1
+    mask[:, :, :, :edge_width] = 1.0  # 左侧200像素
+    mask[:, :, :, -edge_width:] = 1.0  # 右侧200像素
+    
+    return mask
+
 
 # load psedo GT
 def load_psedo_kitti(path):

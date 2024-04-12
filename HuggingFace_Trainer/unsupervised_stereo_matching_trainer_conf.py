@@ -28,9 +28,11 @@ from diffusers.optimization import get_scheduler
 from utils.AverageMeter import AverageMeter
 from losses.unsupervised_loss import loss_disp_unsupervised,MultiScaleLoss,Eki_Loss,Eki_Loss_Local
 from losses.pam_loss import PAMStereoLoss
-from losses.pam_loss import PAMLoss_OutSide
-from losses.pam_loss import PAMLoss_OutSideCenter
-from losses.pam_loss import PAMLoss_Center
+
+
+from losses.pam_loss_conf import PAMLoss_OutSide_Conf
+from losses.pam_loss_conf import PAMLoss_OutSideCenter_Conf
+from losses.pam_loss_conf import PAMLoss_Center_Conf
 
 
 # IMAGENET NORMALIZATION
@@ -41,8 +43,6 @@ logger = get_logger(__name__, log_level="INFO")
 import  matplotlib.pyplot as plt
 
 from utils.metric import P1_metric,P1_Value,D1_metric,Disparity_EPE_Loss
-
-
 
 
 def parse_args():
@@ -145,7 +145,7 @@ def parse_args():
     parser.add_argument(
         "--learning_rate",
         type=float,
-        default=1e-4,
+        default=6e-5 ,
         help="Initial learning rate (after the potential warmup period) to use.",
     )
 
@@ -370,7 +370,6 @@ def main():
     )
     logger.info(accelerator.state, main_process_only=True) # only the main process show the logs
 
-
     # If passed along, set the training seed now.
     if args.seed is not None:
         set_seed(args.seed)
@@ -379,20 +378,16 @@ def main():
     if accelerator.is_main_process:
         if args.output_dir is not None:
             os.makedirs(args.output_dir, exist_ok=True)
-            
-            
+                
     #--------------------------  Loaded the Pretrained Models -------------------------------#
     stereo_matching_network = PASMnet()
     logger.info("initial stereo matching network",main_process_only=True)
-    
     
     if args.resume_from_checkpoint:
         ckpts = torch.load(args.resume_from_checkpoint)
         model_ckpt = ckpts['model_state']
         stereo_matching_network.load_state_dict(model_ckpt)
     
-    
-
     def deepspeed_zero_init_disabled_context_manager():
         """
         returns either a context list that includes one that will disable zero.Init or an empty context list
@@ -405,7 +400,6 @@ def main():
     
     # set to train
     stereo_matching_network.train()
-
 
     # how many cards did we use: accelerator.num_processes
     if args.scale_lr:
@@ -527,7 +521,6 @@ def main():
 
 
     losses_meter = AverageMeter()
-    
     # using the epochs to training the model
     for epoch in range(first_epoch, args.num_train_epochs):
         stereo_matching_network.train()
@@ -538,17 +531,21 @@ def main():
                 left_image_data = batch['img_left'] # left image
                 right_image_data = batch['img_right'] # right pose
                 
-                if args.loss_type=='plusoutside':
+                if args.loss_type=='plusoutside_conf':
                     left_left_image_data = batch['img_left_left'] # left-left image
                     right_right_image_data = batch['img_right_right'] # right-right pose
+                    psnr_score_data = batch['img_quality'] # quality # [B,1]
                 
-                if args.loss_type=="plusoutside_center":
+                if args.loss_type=="plusoutside_center_conf":
                     left_left_image_data = batch['img_left_left'] # left-left image
                     right_right_image_data = batch['img_right_right'] # right-right pose
                     center_image_data = batch['img_center'] # center image
+                    psnr_score_data = batch['img_quality'] # quality # [B,1]
+                    
                 
-                if args.loss_type == "pluscenter":
+                if args.loss_type == "pluscenter_conf":
                     center_image_data = batch['img_center'] # center image
+                    psnr_score_data = batch['img_quality'] # quality # [B,1]
                    
 
                 # inference here
@@ -564,19 +561,8 @@ def main():
                                                                    valid_mask=valid_mask,
                                                                    disp_gt=None)
                 
-                if args.loss_type=='plusoutside':
-                    loss, loss_P, loss_S, loss_PAM = PAMLoss_OutSide(img_left=left_image_data,
-                                                                    img_right=right_image_data,
-                                                                    disp=output,
-                                                                    att=attn_list,
-                                                                    att_cycle=att_cycle,
-                                                                    valid_mask=valid_mask,
-                                                                    disp_gt=None,
-                                                                    img_left_left=left_left_image_data,
-                                                                    img_right_right=right_right_image_data)
-                
-                if args.loss_type =="plusoutside_center":
-                    loss, loss_P, loss_S, loss_PAM = PAMLoss_OutSideCenter(img_left=left_image_data,
+                if args.loss_type=='plusoutside_conf':
+                    loss, loss_P, loss_S, loss_PAM = PAMLoss_OutSide_Conf(img_left=left_image_data,
                                                                     img_right=right_image_data,
                                                                     disp=output,
                                                                     att=attn_list,
@@ -585,17 +571,31 @@ def main():
                                                                     disp_gt=None,
                                                                     img_left_left=left_left_image_data,
                                                                     img_right_right=right_right_image_data,
-                                                                    img_center=center_image_data)
-               
-                if args.loss_type =="pluscenter":
-                    loss, loss_P, loss_S, loss_PAM = PAMLoss_Center(img_left=left_image_data,
+                                                                    conf=psnr_score_data)
+                
+                if args.loss_type =="plusoutside_center_conf":
+                    loss, loss_P, loss_S, loss_PAM = PAMLoss_OutSideCenter_Conf(img_left=left_image_data,
                                                                     img_right=right_image_data,
                                                                     disp=output,
                                                                     att=attn_list,
                                                                     att_cycle=att_cycle,
                                                                     valid_mask=valid_mask,
                                                                     disp_gt=None,
-                                                                    img_center=center_image_data)
+                                                                    img_left_left=left_left_image_data,
+                                                                    img_right_right=right_right_image_data,
+                                                                    img_center=center_image_data,
+                                                                    conf=psnr_score_data)
+               
+                if args.loss_type =="pluscenter_conf":
+                    loss, loss_P, loss_S, loss_PAM = PAMLoss_Center_Conf(img_left=left_image_data,
+                                                                    img_right=right_image_data,
+                                                                    disp=output,
+                                                                    att=attn_list,
+                                                                    att_cycle=att_cycle,
+                                                                    valid_mask=valid_mask,
+                                                                    disp_gt=None,
+                                                                    img_center=center_image_data,
+                                                                    conf=psnr_score_data)
                
                
                 

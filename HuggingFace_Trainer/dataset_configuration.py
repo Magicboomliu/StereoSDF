@@ -106,68 +106,74 @@ if __name__=="__main__":
                                                                     vallist=vallist,
                                                                     batch_size=1,
                                                                     datathread=1,
+                                                                    visible_list=['left','right','left_left','right_right',
+                                                                                  'center','confidence']
                                                                      )
     
-    # test the trainloader
+    # # # test the trainloader
     for sample in tqdm(train_loader):
         
         left_image = sample['img_left']
         right_image = sample['img_right']
-        # left_left_image = sample['img_left_left']
-        # right_right_image = sample['img_right_right']
-        # center_image = sample['img_center']
-        # quality = sample['img_quality']
+        
+        print(left_image.mean())
+    #     # left_left_image = sample['img_left_left']
+    #     # right_right_image = sample['img_right_right']
+    #     # center_image = sample['img_center']
+    #     # quality = sample['img_quality']
         
         
         
-        # left_image = Image_DeNormalization(left_image)
-        # right_image = Image_DeNormalization(right_image)
-        # left_left_image = Image_DeNormalization(left_left_image)
-        # right_right_image = Image_DeNormalization(right_right_image)
-        # center_image = Image_DeNormalization(center_image)
+    #     # left_image = Image_DeNormalization(left_image)
+    #     # right_image = Image_DeNormalization(right_image)
+    #     # left_left_image = Image_DeNormalization(left_left_image)
+    #     # right_right_image = Image_DeNormalization(right_right_image)
+    #     # center_image = Image_DeNormalization(center_image)
         
         
-        # left_image_vis =  Convert_IMGTensor_To_Numpy(left_image)
-        # right_image_vis = Convert_IMGTensor_To_Numpy(right_image)
-        # left_left_image_vis = Convert_IMGTensor_To_Numpy(left_left_image)
-        # right_right_image_vis = Convert_IMGTensor_To_Numpy(right_right_image)
-        # center_image_vis = Convert_IMGTensor_To_Numpy(center_image)
+    #     # left_image_vis =  Convert_IMGTensor_To_Numpy(left_image)
+    #     # right_image_vis = Convert_IMGTensor_To_Numpy(right_image)
+    #     # left_left_image_vis = Convert_IMGTensor_To_Numpy(left_left_image)
+    #     # right_right_image_vis = Convert_IMGTensor_To_Numpy(right_right_image)
+    #     # center_image_vis = Convert_IMGTensor_To_Numpy(center_image)
         
         
-        # plt.figure(figsize=(15,1))
-        # plt.subplot(1,5,1)
-        # plt.axis('off')
-        # plt.title("left-left-image")
-        # plt.imshow(left_left_image_vis)
-        # plt.subplot(1,5,2)
-        # plt.axis("off")
-        # plt.title("left-image")
-        # plt.imshow(left_image_vis)
-        # plt.subplot(1,5,3)
-        # plt.axis("off")
-        # plt.title("center-image")
-        # plt.imshow(center_image_vis)
-        # plt.subplot(1,5,4)
-        # plt.axis("off")
-        # plt.title("right-image")
-        # plt.imshow(right_image_vis)
-        # plt.subplot(1,5,5)
-        # plt.axis("off")
-        # plt.title("right-right-image")
-        # plt.imshow(right_right_image_vis)
-        # plt.show()
-        # plt.savefig("dataset.png")
+    #     # plt.figure(figsize=(15,1))
+    #     # plt.subplot(1,5,1)
+    #     # plt.axis('off')
+    #     # plt.title("left-left-image")
+    #     # plt.imshow(left_left_image_vis)
+    #     # plt.subplot(1,5,2)
+    #     # plt.axis("off")
+    #     # plt.title("left-image")
+    #     # plt.imshow(left_image_vis)
+    #     # plt.subplot(1,5,3)
+    #     # plt.axis("off")
+    #     # plt.title("center-image")
+    #     # plt.imshow(center_image_vis)
+    #     # plt.subplot(1,5,4)
+    #     # plt.axis("off")
+    #     # plt.title("right-image")
+    #     # plt.imshow(right_image_vis)
+    #     # plt.subplot(1,5,5)
+    #     # plt.axis("off")
+    #     # plt.title("right-right-image")
+    #     # plt.imshow(right_right_image_vis)
+    #     # plt.show()
+    #     # plt.savefig("dataset.png")
         
-        # quit()
+    #     # quit()
    
         
         
 
-    # test the valloader
+    # # #test the valloader
     # for sample in tqdm(test_loader):
     #     left_image = sample['img_left']
     #     right_image = sample['img_right']
     #     gt_disp = sample['gt_disp']
+        
+  
 
         
     

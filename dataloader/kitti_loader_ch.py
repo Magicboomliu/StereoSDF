@@ -95,6 +95,9 @@ class KITTI_Multi_View_Dataset(Dataset):
                     rendered_img_confidence = rendered_img_confidence.replace(".png",".txt")
                     sample['quality'] = rendered_img_confidence
                 
+                # gt disparity
+                
+                
                 self.samples.append(sample)
                  
             
@@ -140,7 +143,9 @@ class KITTI_Multi_View_Dataset(Dataset):
                 sample['img_center'] = read_img(sample_path['center']) # [H,W,3]
             if 'confidence' in self.visible_list:
 
-                sample['img_quality'] = np.loadtxt(sample_path['quality'],dtype=float)[1:2]
+                sample['img_quality'] = np.loadtxt(sample_path['quality'],dtype=float)[0:1]
+            
+            
             
             
         
@@ -157,7 +162,6 @@ class KITTI_Multi_View_Dataset(Dataset):
                 sample['img_left'] = read_kitti_image_step2(left_image)
                 sample['img_right'] = read_kitti_image_step2(right_image)
                 w1,h1 = left_image.size
-                
                 
                 
                 # Disparity Crop Operation

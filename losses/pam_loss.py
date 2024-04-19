@@ -379,6 +379,27 @@ def PAMStereoLoss(img_left,img_right,disp,att,att_cycle,valid_mask,disp_gt):
     
     return loss, loss_P, loss_S, loss_PAM
 
+
+def PAMStereoLoss_Simple(img_left,img_right,disp,att,att_cycle,valid_mask,disp_gt):
+    
+    if disp_gt is not None:
+        mask_left = ((disp_gt > 0) & (disp_gt < 192)).float()
+    else:
+        mask_left = torch.ones_like(disp)
+    mask_right = torch.ones_like(mask_left)
+    
+    # loss-p
+    loss_P = loss_disp_unsupervised(img_left, img_right, disp, None, mask_left)
+    
+    # loss-S
+    loss_S = loss_disp_smoothness(disp, img_left)
+
+    loss = loss_P + 0.1 * loss_S
+    
+    return loss, loss_P, loss_S,loss_S
+
+
+
 def PAMLoss_OutSide(img_left,img_right,disp,
                     att,att_cycle,valid_mask,disp_gt,
                     img_left_left, img_right_right

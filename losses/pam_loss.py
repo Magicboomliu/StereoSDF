@@ -19,12 +19,9 @@ def loss_disp_unsupervised(img_left, img_right, disp, valid_mask=None, mask=None
     valid_mask = torch.ones(b, 1, h, w).to(img_left.device) if valid_mask is None else valid_mask
     if mask is not None:
         valid_mask = valid_mask * mask
-
     loss = 0.15 * L1Loss(image_warped * valid_mask, img_left * valid_mask) + \
            0.85 * (valid_mask * (1 - ssim(img_left, image_warped)) / 2).mean()
     return loss
-
-
 
 def L1Loss_without_mean(input, target):
     return (input - target).abs()
@@ -60,9 +57,13 @@ def loss_disp_unsupervised_multi(img_left,
 
     min_tensor_idx = torch.argmin(torch.cat([loss_0_abs,loss_1_abs,loss_2_abs], dim=1), dim=1,keepdim=True) #[B,1,H,W]
     
-    mask_0 = torch.where(min_tensor_idx == 0, torch.tensor(True), torch.tensor(False))
-    mask_1 = torch.where(min_tensor_idx == 1, torch.tensor(True), torch.tensor(False))
-    mask_2 = torch.where(min_tensor_idx == 2, torch.tensor(True), torch.tensor(False))
+    mask_0 = torch.where(min_tensor_idx == 0, torch.tensor(True).to(min_tensor_idx.device), torch.tensor(False).to(min_tensor_idx.device))
+    mask_1 = torch.where(min_tensor_idx == 1, torch.tensor(True).to(min_tensor_idx.device), torch.tensor(False).to(min_tensor_idx.device))
+    mask_2 = torch.where(min_tensor_idx == 2, torch.tensor(True).to(min_tensor_idx.device), torch.tensor(False).to(min_tensor_idx.device))
+    
+    mask_0 = mask_0.type_as(img_left)
+    mask_1 = mask_1.type_as(img_left)
+    mask_2 = mask_2.type_as(img_left)
     
     mask_0= mask_0.float()
     mask_1 = mask_1.float()

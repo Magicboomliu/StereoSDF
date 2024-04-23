@@ -12,25 +12,23 @@ from accelerate.utils import ProjectConfiguration
 
 import sys
 sys.path.append("../")
-
 from models.PAMStereo.PASMnet import PASMnet
+from models.Stereonet.stereonet import StereoNet
+
+
 import json
 
 from tqdm import tqdm
 import argparse
 import accelerate
-from HuggingFace_Trainer.dataset_configuration import prepare_dataset
+from HuggingFace_Trainer.dataset_configuration import prepare_dataset,covered_resultion
 import math
 
 import ast
 from diffusers.optimization import get_scheduler
-
 from utils.AverageMeter import AverageMeter
-from losses.unsupervised_loss import loss_disp_unsupervised,MultiScaleLoss,Eki_Loss,Eki_Loss_Local
-from losses.pam_loss import PAMStereoLoss
-from losses.pam_loss import PAMLoss_OutSide
-from losses.pam_loss import PAMLoss_OutSideCenter
-from losses.pam_loss import PAMLoss_Center
+from losses.pam_loss import PAMStereoLoss,PAMLoss_OutSide
+from losses.unsupervised_loss import Simple_MultiScaleLoss,MultiScaleLoss_Plus_Outside,MultiScaleLoss_Plus_Center,MultiScaleLoss_Plus_Outside_Center
 
 
 # IMAGENET NORMALIZATION
@@ -40,25 +38,24 @@ IMAGENET_STD = [0.229, 0.224, 0.225]
 logger = get_logger(__name__, log_level="INFO")
 import  matplotlib.pyplot as plt
 
-from utils.metric import P1_metric,P1_Value,D1_metric,Disparity_EPE_Loss
-
-
+from utils.metric import P1_metric,P1_Value,D1_metric,Disparity_EPE_Loss,Disaprity_EPE_OOF,Disparity_EPE_Occ
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Unsupervised Stereo Matching Training")
-    
+
     parser.add_argument(
-        "--source_datapath",
+        "--network_type",
         type=str,
-        default="/data1/KITTI/KITTI_Raw",
+        default="PAMStereo",
         required=True,
         help="Specify the dataset name used for training/validation.",
     )
+
     parser.add_argument(
-        "--outside_view_datapath",
+        "--datapath",
         type=str,
-        default="/data1/KITTI/KITTI_Raw",
+        default="/data1/liu/Sintel/",
         required=True,
         help="Specify the dataset name used for training/validation.",
     )
@@ -67,38 +64,23 @@ def parse_args():
         "--lr_warmup_steps", type=int, default=500, help="Number of steps for the warmup in the lr scheduler."
     )
     parser.add_argument(
-        "--center_view_datapath",
-        type=str,
-        default="/data1/KITTI/KITTI_Raw",
-        required=True,
-        help="Specify the dataset name used for training/validation.",
-    )
-    parser.add_argument(
-        "--confidence_datapath",
-        type=str,
-        default="/data1/KITTI/KITTI_Raw",
-        required=True,
-        help="Specify the dataset name used for training/validation.",
-    )
-
-    parser.add_argument(
         "--trainlist",
         type=str,
-        default="/data1/KITTI/KITTI_Raw",
+        default="/home/zliu/NIPS2024/UnsupervisedStereo/StereoSDF/filenames/MPI/MPI_Train_Sub_List.txt",
         required=True,
         help="Specify the dataset name used for training/validation.",
     )
     parser.add_argument(
         "--vallist",
         type=str,
-        default="/data1/KITTI/KITTI_Raw",
+        default="/home/zliu/NIPS2024/UnsupervisedStereo/StereoSDF/filenames/MPI/MPI_Val_Sub_List.txt",
         required=True,
         help="Specify the dataset name used for training/validation.",
     )
     parser.add_argument(
         "--batch_size",
         type=int,
-        default=8,
+        default=4,
         required=True,
         help="Specify the dataset name used for training/validation.",
     )
@@ -277,7 +259,7 @@ def parse_args():
     return args
 
 
-def Inference_on_KITTI2015_Train(stereo_matching_network,
+def Inference_on_MPI_Test(stereo_matching_network,
                                  test_loader,
                                  args,accelerator,
                                  weight_dtype,epoch):
@@ -285,69 +267,77 @@ def Inference_on_KITTI2015_Train(stereo_matching_network,
     stereo_matching_network=accelerator.unwrap_model(stereo_matching_network)    
     
     EPE_OP = Disparity_EPE_Loss
-    P1_ERROR_OP = P1_metric
-    D1_ERROR_OP = D1_metric
+    EPE_OCC_OP = Disparity_EPE_Occ
+    EPE_OFF_OP = Disaprity_EPE_OOF
     
-    flow2_EPEs = AverageMeter()
-    P1_errors = AverageMeter()
-    D1_errors = AverageMeter()
+    EPEs_Meter = AverageMeter()
+    EPEs_OCC_Meter = AverageMeter()
+    EPEs_OFF_Meter  = AverageMeter()
 
     img_nums = 0
     for i, sample_batched in enumerate(test_loader):
-        left_input = sample_batched['img_left']
-        right_input = sample_batched['img_right']
-        target_disp = sample_batched['gt_disp'].unsqueeze(1)
+        left_image_data = sample_batched['final_left'] # left image
+        right_image_data = sample_batched['final_right'] # right pose
         
+        gt_disp_data = sample_batched['disp'].unsqueeze(1)
+        gt_occlusion_data = sample_batched['occlusions'].unsqueeze(1)
+        gt_outof_frame_data = sample_batched['outofframe'].unsqueeze(1)
         
-        b,c,h,w = left_input.shape
-        w_pad = 1280 - w
-        h_pad = 384 -h
-        pad = (w_pad,0,h_pad,0)
-        left_input_pad = F.pad(left_input,pad=pad)
-        right_input_pad = F.pad(right_input,pad=pad)
+        gt_disp_data = covered_resultion(gt_disp_data)
+        gt_occlusion_data = covered_resultion(gt_occlusion_data)
+        gt_outof_frame_data = covered_resultion(gt_outof_frame_data)
+        
+        left_image_data = covered_resultion(left_image_data)
+        right_image_data = covered_resultion(right_image_data)
+        
 
         with torch.no_grad():
             
-            output = stereo_matching_network(left_input_pad,right_input_pad)
+            if args.network_type=='PAMStereo':
+                output = stereo_matching_network(left_image_data,right_image_data)
             
-            output = output[:,:,h_pad:,w_pad:]
-            assert output.shape ==target_disp.shape
-            
-            img_nums += left_input.shape[0]
+            elif args.network_type =="StereoNet":
+                output = stereo_matching_network(left_image_data,right_image_data)['disp']
+                            
+            img_nums += left_image_data.shape[0]
             
             # print(target_disp.shape)
-            flow2_EPE = EPE_OP(output, target_disp)
-            P1_error = P1_ERROR_OP(output, target_disp)
-            D1_error = D1_ERROR_OP(output, target_disp)
+            EPE_Value = EPE_OP(output, gt_disp_data)
+            EPE_OCC_Value = EPE_OCC_OP(output, gt_disp_data,gt_occlusion_data)
+            EPE_OFF_Value = EPE_OFF_OP(output, gt_disp_data,gt_outof_frame_data)
             
 
-        if flow2_EPE.data.item() == flow2_EPE.data.item():
-            flow2_EPEs.update(flow2_EPE.data.item(), left_input.size(0))
-        if P1_error.data.item() == P1_error.data.item():
-            P1_errors.update(P1_error.data.item(), left_input.size(0))
-        if D1_error.data.item() == D1_error.data.item():
-            D1_errors.update(D1_error.data.item(), left_input.size(0))
+        if EPE_Value.data.item() == EPE_Value.data.item():
+            EPEs_Meter.update(EPE_Value.data.item(), left_image_data.size(0))
+            
+        if EPE_OCC_Value.data.item() == EPE_OCC_Value.data.item():
+            EPEs_OCC_Meter.update(EPE_OCC_Value.data.item(), left_image_data.size(0))
+            
+        if EPE_OFF_Value.data.item() == EPE_OFF_Value.data.item():
+            EPEs_OFF_Meter.update(EPE_OFF_Value.data.item(), left_image_data.size(0))
 
         if i % 1 == 0:
             logger.info('Test: [{0}/{1}]\t EPE {2}'
-                    .format(i, len(test_loader), flow2_EPEs.val))
+                    .format(i, len(test_loader), EPEs_Meter.val))
 
-    logger.info(' * DISP EPE {:.3f}'.format(flow2_EPEs.avg))
-    logger.info(' * P1_error {:.3f}'.format(P1_errors.avg))
-    logger.info(' * D1_error {:.3f}'.format(D1_errors.avg))
+    logger.info(' * DISP EPE {:.3f}'.format(EPEs_Meter.avg))
+    logger.info(' * EPE Occ {:.3f}'.format(EPEs_OCC_Meter.avg))
+    logger.info(' * EPE OOF {:.3f}'.format(EPEs_OFF_Meter.avg))
 
     results_dict = dict()
-    results_dict['epe'] = flow2_EPEs.avg
-    results_dict['p1'] = P1_errors.avg
-    results_dict['d1'] = D1_errors.avg
+    results_dict['epe'] = EPEs_Meter.avg
+    results_dict['epe_occ'] = EPEs_OCC_Meter.avg
+    results_dict['epe_off'] = EPEs_OFF_Meter.avg
 
 
     
     os.makedirs(os.path.join(args.output_dir,'Performance'),exist_ok=True)
-    saved_json = os.path.join(os.path.join(args.output_dir,'Performance'),'iter_{}.json'.format(epoch))
+    saved_json = os.path.join(os.path.join(args.output_dir,'Performance'),'epoch_{}.json'.format(epoch))
     # Writing JSON data
     with open(saved_json, 'w') as file:
         json.dump(results_dict, file, indent=4)
+        
+    return results_dict
     
 
 
@@ -382,7 +372,13 @@ def main():
             
             
     #--------------------------  Loaded the Pretrained Models -------------------------------#
-    stereo_matching_network = PASMnet()
+    
+    if args.network_type=="PAMStereo":
+        stereo_matching_network = PASMnet()
+    elif args.network_type =="StereoNet":
+        stereo_matching_network = StereoNet()
+
+    
     logger.info("initial stereo matching network",main_process_only=True)
     
     
@@ -390,7 +386,6 @@ def main():
         ckpts = torch.load(args.resume_from_checkpoint)
         model_ckpt = ckpts['model_state']
         stereo_matching_network.load_state_dict(model_ckpt)
-    
     
 
     def deepspeed_zero_init_disabled_context_manager():
@@ -436,15 +431,14 @@ def main():
     )
     
     with accelerator.main_process_first():
-        train_loader,test_loader,num_batches_per_epoch = prepare_dataset(source_datapath=args.source_datapath,
-                                                                        outside_view_datapath=args.outside_view_datapath,
-                                                                        center_view_datapath=args.center_view_datapath,
-                                                                        confidence_datapath=args.confidence_datapath,
-                                                                        trainlist=args.trainlist,
-                                                                        vallist=args.vallist,
-                                                                        batch_size=args.batch_size,
-                                                                        datathread=args.datathread,
-                                                                        visible_list=ast.literal_eval(args.visible_list))
+        
+        train_loader,test_loader,num_batches_per_epoch = prepare_dataset(datapath=args.datapath,
+                                                                         trainlist=args.trainlist,
+                                                                         vallist=args.vallist,
+                                                                         batch_size=args.batch_size,
+                                                                         datathread=args.datathread,
+                                                                         targetHW=(440,1024),
+                                                                         visible_list=ast.literal_eval(args.visible_list))
         
         logger.info("Loading the train loader, test loader",main_process_only=True)
 
@@ -475,6 +469,7 @@ def main():
         args.mixed_precision = accelerator.mixed_precision
         
     
+    
     stereo_matching_network = stereo_matching_network.to(accelerator.device, dtype=weight_dtype)
 
     # We need to recalculate our total training steps as the size of the training dataloader may have changed.
@@ -485,8 +480,6 @@ def main():
     args.num_train_epochs = math.ceil(args.max_train_steps / num_update_steps_per_epoch)
 
 
-    # We need to initialize the trackers we use, and also store our configuration.
-    # The trackers initializes automatically on the main process.
     if accelerator.is_main_process:
         tracker_config = dict(vars(args))
         accelerator.init_trackers(args.tracker_project_name, tracker_config)
@@ -520,13 +513,21 @@ def main():
     if accelerator.is_main_process:
         stereo_matching_network.eval()
         # inference at here
-        Inference_on_KITTI2015_Train(stereo_matching_network=stereo_matching_network,
+        results = Inference_on_MPI_Test(stereo_matching_network=stereo_matching_network,
                                      test_loader=test_loader,args=args,
                                      accelerator=accelerator,weight_dtype=weight_dtype,
                                      epoch=0)
 
 
     losses_meter = AverageMeter()
+    disp_epe_meter = AverageMeter()
+    disp_epe_occ_meter = AverageMeter()
+    disp_epe_out_of_frame_meter = AverageMeter()
+    
+    Best_EPE = 100
+    Best_EPE_OCC = 100
+    Best_EPE_OFF = 100
+    
     
     # using the epochs to training the model
     for epoch in range(first_epoch, args.num_train_epochs):
@@ -535,75 +536,102 @@ def main():
         for step, batch in enumerate(train_loader):
             with accelerator.accumulate(stereo_matching_network):
 
-                left_image_data = batch['img_left'] # left image
-                right_image_data = batch['img_right'] # right pose
+                left_image_data = batch['final_left'] # left image
+                right_image_data = batch['final_right'] # right pose
                 
-                if args.loss_type=='plusoutside':
-                    left_left_image_data = batch['img_left_left'] # left-left image
-                    right_right_image_data = batch['img_right_right'] # right-right pose
+                gt_disp_data = batch['disp'].unsqueeze(1)
+                gt_occlusion_data = batch['occlusions'].unsqueeze(1)
+                gt_outof_frame_data = batch['outofframe'].unsqueeze(1)
                 
-                if args.loss_type=="plusoutside_center":
-                    left_left_image_data = batch['img_left_left'] # left-left image
-                    right_right_image_data = batch['img_right_right'] # right-right pose
-                    center_image_data = batch['img_center'] # center image
                 
-                if args.loss_type == "pluscenter":
-                    center_image_data = batch['img_center'] # center image
-                   
-
+                if args.loss_type=='plus_outside':
+                    left_left_image_data = batch["rendered_left_left"]
+                    right_right_image_data = batch["rendered_right_right"]
+                
+                if args.loss_type=='plus_center':
+                    med_image_data = batch["rendered_med"]
+                
+                if args.loss_type =='plus_outside_center':
+                    left_left_image_data = batch["rendered_left_left"]
+                    right_right_image_data = batch["rendered_right_right"]
+                    med_image_data = batch["rendered_med"]
+        
                 # inference here
-                output,attn_list,att_cycle,valid_mask = stereo_matching_network(left_image_data,right_image_data,192)
-                
-                if args.loss_type=='simple':
-                    # loss here
-                    loss, loss_P, loss_S, loss_PAM = PAMStereoLoss(left_image_data,
-                                                                   right_image_data,
-                                                                   disp=output,
-                                                                   att=attn_list,
-                                                                   att_cycle=att_cycle,
-                                                                   valid_mask=valid_mask,
-                                                                   disp_gt=None)
-                
-                if args.loss_type=='plusoutside':
-                    loss, loss_P, loss_S, loss_PAM = PAMLoss_OutSide(img_left=left_image_data,
-                                                                    img_right=right_image_data,
+                if args.network_type=='PAMStereo':
+                    output,attn_list,att_cycle,valid_mask = stereo_matching_network(left_image_data,right_image_data,192)
+                    if args.loss_type=='simple':
+                        # loss here
+                        loss, loss_P, loss_S, loss_PAM = PAMStereoLoss(left_image_data,
+                                                                    right_image_data,
                                                                     disp=output,
                                                                     att=attn_list,
                                                                     att_cycle=att_cycle,
                                                                     valid_mask=valid_mask,
-                                                                    disp_gt=None,
-                                                                    img_left_left=left_left_image_data,
-                                                                    img_right_right=right_right_image_data)
-                
-                if args.loss_type =="plusoutside_center":
-                    loss, loss_P, loss_S, loss_PAM = PAMLoss_OutSideCenter(img_left=left_image_data,
-                                                                    img_right=right_image_data,
-                                                                    disp=output,
-                                                                    att=attn_list,
-                                                                    att_cycle=att_cycle,
-                                                                    valid_mask=valid_mask,
-                                                                    disp_gt=None,
-                                                                    img_left_left=left_left_image_data,
-                                                                    img_right_right=right_right_image_data,
-                                                                    img_center=center_image_data)
-               
-                if args.loss_type =="pluscenter":
-                    loss, loss_P, loss_S, loss_PAM = PAMLoss_Center(img_left=left_image_data,
-                                                                    img_right=right_image_data,
-                                                                    disp=output,
-                                                                    att=attn_list,
-                                                                    att_cycle=att_cycle,
-                                                                    valid_mask=valid_mask,
-                                                                    disp_gt=None,
-                                                                    img_center=center_image_data)
-               
-               
-                
+                                                                    disp_gt=None)
+
+                    if args.loss_type=='plus_outside':
+                        loss, loss_P, loss_S, loss_PAM = PAMLoss_OutSide(img_left=left_image_data,
+                                                                        img_right=right_image_data,
+                                                                        disp=output,
+                                                                        att=attn_list,
+                                                                        att_cycle=att_cycle,
+                                                                        valid_mask=valid_mask,
+                                                                        disp_gt=None,
+                                                                        img_left_left=left_left_image_data,
+                                                                        img_right_right=right_right_image_data)
+                elif args.network_type=='StereoNet':
+                    outputs = stereo_matching_network(left_image_data,right_image_data)
+                    disparity_pyramid = outputs["multi_scale"]
+                    output = outputs["disp"]
+                    
+                    if args.loss_type=='simple':
+                        loss = Simple_MultiScaleLoss(weights=[0.8,0.8,1.0],
+                                                     disp_pyramid=disparity_pyramid,
+                                                     left_img=left_image_data,
+                                                     right_img=right_image_data)
+                    if args.loss_type=='plus_outside':
+                        loss = MultiScaleLoss_Plus_Outside(weights=[0.8,0.8,1.0],
+                                                     disp_pyramid=disparity_pyramid,
+                                                     left_img=left_image_data,
+                                                     right_img=right_image_data,
+                                                     left_left=left_left_image_data,
+                                                     right_right=right_right_image_data)
+                    if args.loss_type=='plus_center':
+                        loss = MultiScaleLoss_Plus_Center(weights=[0.8,0.8,1.0],
+                                                     disp_pyramid=disparity_pyramid,
+                                                     left_img=left_image_data,
+                                                     right_img=right_image_data,
+                                                     med_img=med_image_data
+                                                    )
+                    if args.loss_type =='plus_outside_center':
+                        loss = MultiScaleLoss_Plus_Outside_Center(weights=[0.8,0.8,1.0],
+                                                                  
+                                                     disp_pyramid=disparity_pyramid,
+                                                     left_img=left_image_data,
+                                                     right_img=right_image_data,
+                                                     left_left=left_left_image_data,
+                                                     right_right=right_right_image_data,
+                                                     
+                                                     img_center=med_image_data)
+                    
+                    
+                        
+                    
+    
+                    
+                # only for metric
+                disp_epe_value = Disparity_EPE_Loss(output,gt_disp_data)
+                disp_epe_occ_value = Disparity_EPE_Occ(output,gt_disp_data,gt_occlusion_data)
+                disp_epe_oof_value = Disaprity_EPE_OOF(output,gt_disp_data,gt_outof_frame_data)
+                    
                 
                 losses_meter.update(loss.data.item(), left_image_data.size(0))
+                disp_epe_meter.update(disp_epe_value.data.item(),left_image_data.size(0))
+                disp_epe_occ_meter.update(disp_epe_occ_value.data.item(),left_image_data.size(0))
+                disp_epe_out_of_frame_meter.update(disp_epe_oof_value.data.item(),left_image_data.size(0))
+                
+                
                 accelerator.backward(loss)
-                # if accelerator.sync_gradients:
-                #     accelerator.clip_grad_norm_(stereo_matching_network.parameters(), args.max_grad_norm)
 
                 optimizer.step()
                 lr_scheduler.step()
@@ -614,26 +642,13 @@ def main():
                 global_step += 1
                 if global_step % 10 == 0:
                     accelerator.log({"train_loss": losses_meter.val}, step=global_step)
+                    logger.info("current_loss: {},\t disp epe: {}, \t disp_occ_epe: {} \t disp_oof_epe: {}".format(losses_meter.val,
+                                                                                                                   disp_epe_meter.val,
+                                                                                                                   disp_epe_occ_meter.val,
+                                                                                                                   disp_epe_out_of_frame_meter.val),
+                                main_process_only=True)
                 train_loss = 0.0
-                
-            # validation here
             
-                
-            # save checkponts
-            if global_step % args.checkpointing_steps == 0:
-                    if accelerator.is_main_process:
-                        unwarped_model = accelerator.unwrap_model(stereo_matching_network)
-                        unwarped_optimizer = accelerator.unwrap_model(optimizer)
-                        unwarped_lr = accelerator.unwrap_model(lr_scheduler)
-                        torch.save(
-                            {"model_state":unwarped_model.state_dict(),
-                                'optim_state': unwarped_optimizer.state_dict(),
-                                'lr_state': unwarped_lr.state_dict()
-                                },
-                            os.path.join(args.output_dir,f"ckpt_step_{step+1}_epoch{epoch}.pt")
-                            # model_config['saved_path'] + f'ckpt_{epoch+1}.pt'
-                        )
-                        logger.info(f'checkpoint ckpt_step_{step+1}.pt is saved...')
                         
             
             # logger.info(" step loss:{} \t learning rate {}".format(loss.detach().item(),
@@ -653,10 +668,44 @@ def main():
             logger.info("Inference Here At Epoch {}".format(epoch))
             stereo_matching_network.eval()
             # inference at here
-            Inference_on_KITTI2015_Train(stereo_matching_network=stereo_matching_network,
+            results = Inference_on_MPI_Test(stereo_matching_network=stereo_matching_network,
                                         test_loader=test_loader,args=args,
                                         accelerator=accelerator,weight_dtype=weight_dtype,
                                         epoch=epoch)
+
+            current_epe = results['epe']
+            current_epe_off = results['epe_off']
+            current_epe_occ = results['epe_occ']
+            
+            if current_epe<Best_EPE:
+                Best_EPE = current_epe
+                unwarped_model = accelerator.unwrap_model(stereo_matching_network)
+                torch.save(
+                    {"model_state":unwarped_model.state_dict(),
+                    "epoch":epoch,
+                    "best_score": current_epe,
+                        },
+                    os.path.join(args.output_dir,f"best_EPE_model.pt"))
+
+            if current_epe_off<Best_EPE_OFF:
+                Best_EPE_OFF = current_epe_off
+                unwarped_model = accelerator.unwrap_model(stereo_matching_network)
+                torch.save(
+                    {"model_state":unwarped_model.state_dict(),
+                    "epoch":epoch,
+                    "best_score": current_epe_off,
+                        },
+                    os.path.join(args.output_dir,f"best_EPE_OFF_model.pt"))
+
+            if current_epe_occ<Best_EPE_OCC:
+                Best_EPE_OCC = current_epe_occ
+                unwarped_model = accelerator.unwrap_model(stereo_matching_network)
+                torch.save(
+                    {"model_state":unwarped_model.state_dict(),
+                    "epoch":epoch,
+                    "best_score": current_epe_occ,
+                        },
+                    os.path.join(args.output_dir,f"best_EPE_OCC_model.pt"))
     
     
     

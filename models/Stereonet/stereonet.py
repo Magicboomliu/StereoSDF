@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+
 def make_cost_volume(left, right, max_disp):
     cost_volume = torch.ones(
         (left.size(0), left.size(1), max_disp, left.size(2), left.size(3)),
@@ -15,6 +16,7 @@ def make_cost_volume(left, right, max_disp):
 
     return cost_volume
 
+
 def conv_3x3(in_c, out_c, s=1, d=1):
     return nn.Sequential(
         nn.Conv2d(in_c, out_c, 3, s, d, dilation=d, bias=False),
@@ -22,12 +24,14 @@ def conv_3x3(in_c, out_c, s=1, d=1):
         nn.ReLU(),
     )
 
+
 def conv_1x1(in_c, out_c):
     return nn.Sequential(
         nn.Conv2d(in_c, out_c, 1, bias=False),
         nn.BatchNorm2d(out_c),
         nn.ReLU(),
     )
+
 
 class ResBlock(nn.Module):
     def __init__(self, c0, dilation=1):
@@ -40,6 +44,7 @@ class ResBlock(nn.Module):
     def forward(self, input):
         x = self.conv(input)
         return x + input
+
 
 class RefineNet(nn.Module):
     def __init__(self):
@@ -62,6 +67,7 @@ class RefineNet(nn.Module):
         x = torch.cat((disp, rgb), dim=1)
         x = self.conv0(x)
         return F.relu(disp + x)
+
 
 class StereoNet(nn.Module):
     def __init__(self):
@@ -125,14 +131,10 @@ class StereoNet(nn.Module):
 
 
 if __name__ == "__main__":
-    from thop import profile
+
 
     left = torch.rand(1, 3, 540, 960)
     right = torch.rand(1, 3, 540, 960)
     model = StereoNet()
 
-    # H,W 
-    results = model(left, right)["multi_scale"]
-    
-    for result in results:
-        print(result.shape)
+    print(len(model(left, right)["multi_scale"]))

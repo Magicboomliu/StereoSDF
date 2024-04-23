@@ -42,6 +42,29 @@ def Disparity_EPE_Loss(predicted_disparity,gt_disparity):
     epe_val = torch.abs(predicted_disparity*valid_mask-gt_disparity*valid_mask).sum()/(valid_mask.sum()+eps)
     return epe_val
 
+def Disparity_EPE_Occ(predicted_disparity,gt_disparity,occ_mask):
+    valid_mask1 = gt_disparity >0 
+    valid_mask2 = gt_disparity<192
+    valid_mask = valid_mask1 * valid_mask2
+    eps =1e-6
+    valid_mask = valid_mask * occ_mask
+
+    epe_val = torch.abs(predicted_disparity*valid_mask-gt_disparity*valid_mask).sum()/(valid_mask.sum()+eps)
+    return epe_val
+
+
+def Disaprity_EPE_OOF(predicted_disparity,gt_disparity,oof_mask):
+    valid_mask1 = gt_disparity >0 
+    valid_mask2 = gt_disparity<192
+    valid_mask = valid_mask1 * valid_mask2
+    eps =1e-6
+    valid_mask = valid_mask * oof_mask
+
+    epe_val = torch.abs(predicted_disparity*valid_mask-gt_disparity*valid_mask).sum()/(valid_mask.sum()+eps)
+    return epe_val
+
+
+
 def Disparity_EPE_Loss_KITTI(predicted_disparity,gt_disparity):
     valid_mask1 = gt_disparity >0 
     valid_mask2 = gt_disparity<320

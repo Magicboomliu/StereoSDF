@@ -6,3 +6,10 @@ wandb/*
 logs/*
 visualization/output/*
 # visualization/test_data/*
+logs_mono_M_Engen_zhou
+experiments
+logs
+*.png
+*.jpg
+*.pt
+*.json
